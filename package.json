@@ -1,0 +1,11 @@
+{
+  "name": "claw-deploy-script",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw 极简部署脚本",
+  "scripts": {
+    "start": "node scripts/deploy.js",
+    "dry-run": "node scripts/deploy.js --dry-run"
+  }
+}
