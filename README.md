@@ -59,13 +59,13 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash -s -- --model openai/gpt-5.4 --bot dashboard --api-key sk-xxxx --yes
+curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash -s -- --model openai/gpt-5.4 --bot telegram --api-key sk-xxxx --telegram-bot-token 123456789:AAExample --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content)) --model openai/gpt-5.4 --bot dashboard --api-key sk-xxxx --yes"
+powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content)) --model openai/gpt-5.4 --bot telegram --api-key sk-xxxx --telegram-bot-token 123456789:AAExample --yes"
 ```
 
 ### 交互式一条命令
@@ -96,13 +96,13 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 macOS / Linux:
 
 ```bash
-bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot dashboard --yes
+bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot dashboard --yes
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
 ```
 
 这适合后续做成官网复制命令、远程安装或自动化发放脚本。
@@ -119,6 +119,7 @@ Windows PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
+```
 
 ## 模型选择说明
 
@@ -134,20 +135,16 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - `openrouter/openai/gpt-5.4`
 - 为兼容旧版本脚本，`openai-gpt-5-2` 这类历史短 id 仍然可以识别，但不再推荐继续使用。
 - DeepSeek 现在会优先通过 OpenClaw 已支持的一键 provider 出现在目录里，例如 `Hugging Face`、`Together AI`、`Volcano Engine`、`OpenRouter`。
-```
 
 ## 当前极简模式支持
 
-- `控制台网页聊天`
-  - 最低门槛
-  - 部署完成后直接打开 OpenClaw Dashboard 使用
-- `WhatsApp 机器人`
-  - 自动写入安全默认值
-  - 最后一步进入二维码登录流程
 - `Telegram`
   - 自动写入 `channels.telegram.enabled`、`botToken`、`dmPolicy=pairing`
   - 默认关闭群消息，先用私聊完成首轮 pairing
   - 首次接入时先给机器人发一条普通私聊消息，再执行 `openclaw pairing list telegram` / `openclaw pairing approve telegram <CODE>`
+- `WhatsApp 机器人`
+  - 自动写入安全默认值
+  - 最后一步进入二维码登录流程
 
 暂未纳入默认脚本流程的渠道：
 
@@ -184,7 +181,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - `install.sh`
   - `install.ps1`
   - `openclaw onboard --non-interactive`
-- Dashboard 视为最低门槛聊天入口，因为它不需要额外渠道凭证。
 - WhatsApp 允许保留最后一步扫码登录，因为它不是额外文本输入，仍符合“极简输入”的目标。
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。

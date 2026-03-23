@@ -166,20 +166,6 @@ const FALLBACK_MODEL_OPTIONS = Object.values(PROVIDER_CATALOG).flatMap((provider
 );
 
 export const BOT_CATALOG = {
-  dashboard: {
-    id: "dashboard",
-    label: "控制台网页聊天",
-    description: "零额外配置，部署完成后直接在浏览器里聊天。",
-    resultHint: "部署完成后可直接打开 Dashboard 使用。",
-    credentialFields: [],
-  },
-  whatsapp: {
-    id: "whatsapp",
-    label: "WhatsApp 机器人",
-    description: "部署完成后自动进入二维码登录步骤，适合手机聊天。",
-    resultHint: "部署完成后请按日志提示完成 WhatsApp 扫码登录。",
-    credentialFields: [],
-  },
   telegram: {
     id: "telegram",
     label: "Telegram 机器人",
@@ -194,6 +180,13 @@ export const BOT_CATALOG = {
         secret: true,
       },
     ],
+  },
+  whatsapp: {
+    id: "whatsapp",
+    label: "WhatsApp 机器人",
+    description: "部署完成后自动进入二维码登录步骤，适合手机聊天。",
+    resultHint: "部署完成后请按日志提示完成 WhatsApp 扫码登录。",
+    credentialFields: [],
   },
 };
 
@@ -639,14 +632,7 @@ export function buildDeploymentPlan(envState, payload) {
     },
   );
 
-  if (payload.botId === "dashboard") {
-    steps.push({
-      id: "dashboard-url",
-      title: "生成 Dashboard 访问地址",
-      command: "openclaw",
-      args: ["dashboard", "--no-open"],
-    });
-  } else if (payload.botId === "whatsapp") {
+  if (payload.botId === "whatsapp") {
     steps.push({
       id: "whatsapp-login",
       title: "进入 WhatsApp 扫码登录流程",
@@ -732,7 +718,7 @@ function buildPostDeployNotes(botId) {
     return ["按日志提示完成 WhatsApp 扫码登录后，即可开始私聊测试。"];
   }
 
-  return ["可直接打开 Dashboard 进行聊天测试。"];
+  return [];
 }
 
 /**

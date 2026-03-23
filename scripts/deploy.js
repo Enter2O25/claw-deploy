@@ -172,12 +172,13 @@ function getChoiceIdentity(item) {
  */
 async function promptChoice(terminal, title, items, describe, fallbackId = "") {
   renderChoices(title, items, describe);
+  const fallbackItem = fallbackId ? items.find((item) => getChoiceIdentity(item) === fallbackId) : undefined;
 
   while (true) {
-    const answer = (await promptLine(`请输入编号${fallbackId ? `，直接回车默认 ${fallbackId}` : ""}：`, terminal)).trim();
+    const answer = (await promptLine(`请输入编号${fallbackItem ? `，直接回车默认 ${getChoiceIdentity(fallbackItem)}` : ""}：`, terminal)).trim();
 
-    if (!answer && fallbackId) {
-      return items.find((item) => getChoiceIdentity(item) === fallbackId);
+    if (!answer && fallbackItem) {
+      return fallbackItem;
     }
 
     const numericIndex = Number(answer);
@@ -396,7 +397,7 @@ async function selectModel(terminal, args) {
     "请选择模型提供商",
     catalog.providers,
     (item) => `${item.label} - ${item.count} 个模型 - ${item.hint}`,
-    "openai",
+    catalog.providers.find((item) => item.id === "openai")?.id || catalog.providers[0]?.id || "",
   );
 
   const defaultModelRef = provider.preferredModels.find((ref) => provider.models.some((model) => model.ref === ref));
@@ -442,11 +443,11 @@ async function main() {
     const bot =
       bots.find((item) => item.id === args.botId) ||
       (await promptChoice(
-        rl,
+        terminal,
         "请选择聊天机器人",
         bots,
         (item) => `${item.label} - ${item.description}`,
-        "dashboard",
+        "telegram",
       ));
 
     let apiKey = args.apiKey;
