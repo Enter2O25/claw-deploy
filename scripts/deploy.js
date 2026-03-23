@@ -260,7 +260,7 @@ function printSummary(selection) {
   if (selection.bot.credentialFields?.length) {
     console.log(`  额外凭证: ${selection.bot.credentialFields.map((field) => field.label).join("、")}`);
   }
-  console.log("  自动动作: 环境检测 -> 安装/修复 -> onboard -> 默认配置 -> 状态校验");
+  console.log("  自动动作: 环境检测 -> 安装/修复 -> onboard -> 默认配置 -> 后台服务 -> 状态校验");
 }
 
 function printModelCatalogSummary(catalog) {

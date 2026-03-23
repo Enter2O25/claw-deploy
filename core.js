@@ -627,10 +627,16 @@ export function buildDeploymentPlan(envState, payload) {
       args: ["config", "validate"],
     },
     {
-      id: "restart-gateway",
-      title: "重启 Gateway 使配置生效",
+      id: "install-gateway-service",
+      title: "安装后台 Gateway 服务",
       command: "openclaw",
-      args: ["gateway", "restart"],
+      args: ["gateway", "install", "--runtime", "node", "--force"],
+    },
+    {
+      id: "start-gateway-service",
+      title: "启动后台 Gateway 服务",
+      command: "openclaw",
+      args: ["gateway", "start"],
     },
   );
 
@@ -647,7 +653,7 @@ export function buildDeploymentPlan(envState, payload) {
     id: "health-check",
     title: "执行最终状态检查",
     command: "openclaw",
-    args: ["gateway", "status"],
+    args: ["gateway", "status", "--deep"],
   });
 
   return {
@@ -679,9 +685,6 @@ function buildOnboardArgs(provider, apiKey) {
     "18789",
     "--gateway-bind",
     "loopback",
-    "--install-daemon",
-    "--daemon-runtime",
-    "node",
     "--skip-skills",
     "--accept-risk",
   ];
@@ -709,9 +712,11 @@ function buildOnboardArgs(provider, apiKey) {
 function buildPostDeployNotes(botId) {
   const openclawCommand = getUserFacingOpenClawCommand();
   const pathHint = getUserFacingPathRefreshHint();
+  const backgroundNotes = buildBackgroundServiceNotes(openclawCommand);
 
   if (botId === "telegram") {
     return [
+      ...backgroundNotes,
       "Telegram 已启用。先去 Telegram 私聊你的机器人，发送一条普通消息来触发首个 pairing code。",
       `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
       `如果只发 /start 仍没看到配对码，请先执行 ${openclawCommand} pairing list telegram 检查待审批请求。`,
@@ -722,12 +727,13 @@ function buildPostDeployNotes(botId) {
 
   if (botId === "whatsapp") {
     return [
+      ...backgroundNotes,
       `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
       "按日志提示完成 WhatsApp 扫码登录后，即可开始私聊测试。",
     ];
   }
 
-  return [];
+  return backgroundNotes;
 }
 
 /**
@@ -750,6 +756,19 @@ function getUserFacingPathRefreshHint() {
   }
 
   return 'export PATH="$HOME/.local/bin:$PATH"';
+}
+
+/**
+ * 后台服务已经由脚本显式安装并启动；Linux 服务器若要求退出 SSH 后继续常驻，还需要开启 linger。
+ */
+function buildBackgroundServiceNotes(openclawCommand) {
+  const notes = [`后台 Gateway 服务已启动，可执行 ${openclawCommand} gateway status --deep 查看当前状态。`];
+
+  if (process.platform === "linux") {
+    notes.push("如需在 Linux 服务器退出 SSH 后仍继续常驻，请执行一次：sudo loginctl enable-linger $USER");
+  }
+
+  return notes;
 }
 
 /**

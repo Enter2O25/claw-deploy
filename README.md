@@ -21,7 +21,8 @@
 - 写入默认模型
 - 关闭默认心跳，避免首次部署后自动发消息
 - 按聊天机器人类型写入安全默认配置
-- 重启 Gateway 并做最终状态检查
+- 显式安装并启动后台 Gateway 服务
+- 执行最终状态检查
 
 ## 推荐用法
 
@@ -53,6 +54,12 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
 
 - Linux / macOS 执行：`export PATH="$HOME/.local/bin:$PATH"`
 - 或者重新打开一个终端会话
+
+如果你是在 Linux 服务器上部署，并希望退出 SSH 后 OpenClaw 仍继续常驻，还需要执行一次：
+
+```bash
+sudo loginctl enable-linger $USER
+```
 
 如果要远程传参，也支持直接透传：
 
@@ -140,10 +147,12 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 
 - `Telegram`
   - 自动写入 `channels.telegram.enabled`、`botToken`、`dmPolicy=pairing`
+  - 会显式安装并启动后台 Gateway 服务
   - 默认关闭群消息，先用私聊完成首轮 pairing
   - 首次接入时先给机器人发一条普通私聊消息，再执行 `~/.local/bin/openclaw pairing list telegram` / `~/.local/bin/openclaw pairing approve telegram <CODE>`
 - `WhatsApp 机器人`
   - 自动写入安全默认值
+  - 会显式安装并启动后台 Gateway 服务
   - 最后一步进入二维码登录流程
 
 暂未纳入默认脚本流程的渠道：
@@ -181,9 +190,12 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - `install.sh`
   - `install.ps1`
   - `openclaw onboard --non-interactive`
+  - `openclaw gateway install --runtime node --force`
+  - `openclaw gateway start`
 - WhatsApp 允许保留最后一步扫码登录，因为它不是额外文本输入，仍符合“极简输入”的目标。
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。
+- Linux 服务器若要求“退出 SSH 后仍继续运行”，仍需按 systemd user service 的要求启用 `loginctl enable-linger`。
 - 远程安装入口默认从 GitHub Raw 下载当前脚本，再从 GitHub 仓库归档下载完整代码。
 - 如需切换仓库、分支或安装目录，可覆盖下面这些环境变量：
   - `CLAW_DEPLOY_REPOSITORY`
