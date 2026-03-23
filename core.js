@@ -894,6 +894,7 @@ function buildOnboardArgs(provider, apiKey) {
     "18789",
     "--gateway-bind",
     "loopback",
+    "--skip-health",
     "--skip-skills",
     "--accept-risk",
   ];
