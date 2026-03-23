@@ -25,8 +25,19 @@ $archiveFile = Join-Path $tmpDir "claw-deploy.zip"
 $extractDir = Join-Path $tmpDir "extract"
 $backupDir = "$installHome.backup"
 
+function Write-Step {
+  param(
+    [string]$Index,
+    [string]$Title
+  )
+
+  Write-Host ""
+  Write-Host "[$Index] $Title"
+}
+
 try {
-  Write-Host "准备下载 $repository@$refName ..."
+  Write-Step "步骤 1/3" "下载并准备部署脚本"
+  Write-Host "  · 仓库来源: $repository@$refName"
   New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
   Invoke-WebRequest -Uri $archiveUrl -OutFile $archiveFile
   Expand-Archive -Path $archiveFile -DestinationPath $extractDir -Force
@@ -43,6 +54,7 @@ try {
     throw "远程安装包结构不符合预期，缺少 scripts/bootstrap.ps1。"
   }
 
+  Write-Host "  · 准备本地安装目录"
   New-Item -ItemType Directory -Path (Split-Path -Parent $installHome) -Force | Out-Null
 
   if (Test-Path $backupDir) {
@@ -54,7 +66,7 @@ try {
   }
 
   Move-Item -Path $sourceDir.FullName -Destination $installHome -Force
-  Write-Host "代码已安装到 $installHome"
+  Write-Host "  ✓ 代码已安装到 $installHome"
   & (Join-Path $installHome "scripts\bootstrap.ps1") @args
   exit $LASTEXITCODE
 } finally {

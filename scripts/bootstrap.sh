@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET_SCRIPT="${ROOT_DIR}/scripts/deploy.js"
 
+print_step() {
+  printf "\n[%s] %s\n" "$1" "$2"
+}
+
 find_node() {
   if command -v node >/dev/null 2>&1; then
     command -v node
@@ -25,9 +29,11 @@ find_node() {
 
 node_path="$(find_node || true)"
 
+print_step "步骤 2/3" "检测运行环境"
+
 if [ -z "${node_path}" ]; then
-  echo "未检测到 Node 22+，正在调用 OpenClaw 官方安装脚本自动补齐环境..."
-  curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
+  echo "  · 未检测到 Node 22+，准备自动安装运行环境"
+  bash "${ROOT_DIR}/scripts/install-openclaw-runtime.sh"
   node_path="$(find_node || true)"
 fi
 
@@ -39,9 +45,12 @@ fi
 node_major="$("${node_path}" -p 'process.versions.node.split(".")[0]')"
 
 if [ "${node_major}" -lt 22 ]; then
-  echo "当前 Node 版本低于 22，正在尝试通过 OpenClaw 官方安装脚本升级..."
-  curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
+  echo "  · 当前 Node 版本低于 22，准备自动升级运行环境"
+  bash "${ROOT_DIR}/scripts/install-openclaw-runtime.sh"
+  node_path="$(find_node || true)"
+  node_major="$("${node_path}" -p 'process.versions.node.split(".")[0]')"
 fi
 
-echo "启动 OpenClaw 极简部署向导..."
+print_step "步骤 3/3" "启动部署向导"
+echo "  ✓ Node.js ${node_major} 已就绪"
 exec "${node_path}" "${TARGET_SCRIPT}" "$@"

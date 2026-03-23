@@ -28,7 +28,12 @@ cleanup() {
 
 trap cleanup EXIT
 
-echo "准备下载 ${REPOSITORY}@${REF_NAME} ..."
+print_step() {
+  printf "\n[%s] %s\n" "$1" "$2"
+}
+
+print_step "步骤 1/3" "下载并准备部署脚本"
+echo "  · 仓库来源: ${REPOSITORY}@${REF_NAME}"
 mkdir -p "${EXTRACT_DIR}"
 curl -fsSL "${ARCHIVE_URL}" -o "${ARCHIVE_FILE}"
 tar -xzf "${ARCHIVE_FILE}" -C "${EXTRACT_DIR}"
@@ -45,6 +50,7 @@ if [ -z "${SOURCE_DIR}" ] || [ ! -f "${SOURCE_DIR}/scripts/bootstrap.sh" ]; then
   exit 1
 fi
 
+echo "  · 准备本地安装目录"
 mkdir -p "$(dirname "${INSTALL_HOME}")"
 
 if [ -d "${BACKUP_DIR}" ]; then
@@ -57,5 +63,5 @@ fi
 
 mv "${SOURCE_DIR}" "${INSTALL_HOME}"
 
-echo "代码已安装到 ${INSTALL_HOME}"
+echo "  ✓ 代码已安装到 ${INSTALL_HOME}"
 exec bash "${INSTALL_HOME}/scripts/bootstrap.sh" "$@"

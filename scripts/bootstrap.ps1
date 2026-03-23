@@ -2,6 +2,16 @@ $ErrorActionPreference = "Stop"
 $rootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $targetScript = Join-Path $rootDir "scripts\deploy.js"
 
+function Write-Step {
+  param(
+    [string]$Index,
+    [string]$Title
+  )
+
+  Write-Host ""
+  Write-Host "[$Index] $Title"
+}
+
 function Find-Node {
   $command = Get-Command node -ErrorAction SilentlyContinue
   if ($command) {
@@ -24,12 +34,11 @@ function Find-Node {
 
 $nodePath = Find-Node
 
+Write-Step "步骤 2/3" "检测运行环境"
+
 if (-not $nodePath) {
-  Write-Host "未检测到 Node 22+，正在调用 OpenClaw 官方安装脚本自动补齐环境..."
-  $tempScript = Join-Path $env:TEMP "openclaw-install.ps1"
-  Invoke-WebRequest -Uri "https://openclaw.ai/install.ps1" -OutFile $tempScript
-  & powershell -ExecutionPolicy Bypass -File $tempScript --no-onboard
-  Remove-Item $tempScript -Force
+  Write-Host "  · 未检测到 Node 22+，准备自动安装运行环境"
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\install-openclaw-runtime.ps1")
   $nodePath = Find-Node
 }
 
@@ -40,12 +49,12 @@ if (-not $nodePath) {
 $nodeMajor = & $nodePath -p "process.versions.node.split('.')[0]"
 
 if ([int]$nodeMajor -lt 22) {
-  Write-Host "当前 Node 版本低于 22，正在尝试通过 OpenClaw 官方安装脚本升级..."
-  $tempScript = Join-Path $env:TEMP "openclaw-install.ps1"
-  Invoke-WebRequest -Uri "https://openclaw.ai/install.ps1" -OutFile $tempScript
-  & powershell -ExecutionPolicy Bypass -File $tempScript --no-onboard
-  Remove-Item $tempScript -Force
+  Write-Host "  · 当前 Node 版本低于 22，准备自动升级运行环境"
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $rootDir "scripts\install-openclaw-runtime.ps1")
+  $nodePath = Find-Node
+  $nodeMajor = & $nodePath -p "process.versions.node.split('.')[0]"
 }
 
-Write-Host "启动 OpenClaw 极简部署向导..."
+Write-Step "步骤 3/3" "启动部署向导"
+Write-Host "  ✓ Node.js $nodeMajor 已就绪"
 & $nodePath $targetScript @args

@@ -254,8 +254,8 @@ function buildInstallerStep() {
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
-        "-Command",
-        "$tmp = Join-Path $env:TEMP 'openclaw-install.ps1'; Invoke-WebRequest -Uri 'https://openclaw.ai/install.ps1' -OutFile $tmp; & powershell -ExecutionPolicy Bypass -File $tmp --no-onboard; Remove-Item $tmp -Force",
+        "-File",
+        path.join(__dirname, "scripts", "install-openclaw-runtime.ps1"),
       ],
     };
   }
@@ -264,7 +264,7 @@ function buildInstallerStep() {
     id: "install-openclaw",
     title: "安装或修复 OpenClaw 运行环境",
     command: "bash",
-    args: ["-lc", "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard"],
+    args: [path.join(__dirname, "scripts", "install-openclaw-runtime.sh")],
   };
 }
 

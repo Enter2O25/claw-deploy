@@ -45,6 +45,7 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
   - macOS / Linux: `~/.claw-deploy`
   - Windows: `$HOME\.claw-deploy`
 - 再调用本地部署脚本继续执行
+- 安装过程中只展示本脚本自己的步骤提示，不直接暴露官方安装器原始输出
 
 如果要远程传参，也支持直接透传：
 
