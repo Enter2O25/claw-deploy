@@ -122,8 +122,12 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - `openai/gpt-5.4`
   - `anthropic/claude-sonnet-4-5`
   - `google/gemini-2.5-pro`
+  - `huggingface/deepseek-ai/DeepSeek-R1`
+  - `together/deepseek-ai/DeepSeek-R1`
+  - `volcengine/deepseek-v3-2-251201`
   - `openrouter/openai/gpt-5.4`
 - 为兼容旧版本脚本，`openai-gpt-5-2` 这类历史短 id 仍然可以识别，但不再推荐继续使用。
+- DeepSeek 现在会优先通过 OpenClaw 已支持的一键 provider 出现在目录里，例如 `Hugging Face`、`Together AI`、`Volcano Engine`、`OpenRouter`。
 ```
 
 ## 当前极简模式支持

@@ -54,7 +54,7 @@ export const PROVIDER_CATALOG = {
     keyLabel: "Hugging Face Token",
     placeholder: "hf_...",
     hint: "适合通过 Hugging Face 路由访问多种开源模型。",
-    preferredModels: ["huggingface/deepseek-ai/DeepSeek-R1"],
+    preferredModels: ["huggingface/deepseek-ai/DeepSeek-R1", "huggingface/deepseek-ai/DeepSeek-V3.2"],
   },
   together: {
     id: "together",
@@ -64,7 +64,11 @@ export const PROVIDER_CATALOG = {
     keyLabel: "Together API Key",
     placeholder: "sk-...",
     hint: "适合一把 API Key 访问大量开源模型。",
-    preferredModels: ["together/moonshotai/Kimi-K2.5", "together/deepseek-ai/DeepSeek-R1"],
+    preferredModels: [
+      "together/deepseek-ai/DeepSeek-R1",
+      "together/deepseek-ai/DeepSeek-V3.1",
+      "together/moonshotai/Kimi-K2.5",
+    ],
   },
   mistral: {
     id: "mistral",
@@ -135,6 +139,20 @@ export const PROVIDER_CATALOG = {
     placeholder: "sk-...",
     hint: "适合通过 Synthetic 访问兼容 Anthropic 的聚合模型目录。",
     preferredModels: ["synthetic/hf:MiniMaxAI/MiniMax-M2.5"],
+  },
+  volcengine: {
+    id: "volcengine",
+    label: "Volcano Engine",
+    authChoice: "volcengine-api-key",
+    keyFlag: "--volcengine-api-key",
+    keyLabel: "Volcano Engine API Key",
+    placeholder: "sk-...",
+    hint: "适合在火山引擎目录里访问 Doubao、Kimi、GLM 与 DeepSeek 模型。",
+    preferredModels: [
+      "volcengine/deepseek-v3-2-251201",
+      "volcengine/kimi-k2-5-260127",
+      "volcengine/glm-4-7-251222",
+    ],
   },
 };
 
