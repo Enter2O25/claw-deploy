@@ -42,10 +42,16 @@ find_node() {
 }
 
 find_openclaw() {
-  if command -v openclaw >/dev/null 2>&1; then
-    command -v openclaw
-    return 0
-  fi
+  local shim_path="${HOME}/.local/bin/openclaw"
+  local candidate=""
+
+  # 跳过我们自己生成的 shim，避免二次执行时把 shim 再包成指向自身的递归入口。
+  while IFS= read -r candidate; do
+    if [ -n "${candidate}" ] && [ "${candidate}" != "${shim_path}" ]; then
+      echo "${candidate}"
+      return 0
+    fi
+  done < <(type -a -p openclaw 2>/dev/null || true)
 
   if command -v npm >/dev/null 2>&1; then
     local npm_prefix
@@ -62,6 +68,11 @@ find_openclaw() {
     return 0
   fi
 
+  if [ -x "${HOME}/.openclaw/bin/openclaw" ]; then
+    echo "${HOME}/.openclaw/bin/openclaw"
+    return 0
+  fi
+
   return 1
 }
 
@@ -70,6 +81,10 @@ ensure_openclaw_command() {
   local shim_dir="${HOME}/.local/bin"
   local shim_path="${shim_dir}/openclaw"
   local export_line='export PATH="$HOME/.local/bin:$PATH"'
+
+  if [ "${openclaw_path}" = "${shim_path}" ]; then
+    return 0
+  fi
 
   mkdir -p "${shim_dir}"
 

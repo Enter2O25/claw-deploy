@@ -50,9 +50,15 @@ function Find-Node {
 }
 
 function Find-OpenClaw {
-  $command = Get-Command openclaw -ErrorAction SilentlyContinue
-  if ($command) {
-    return $command.Source
+  $shimPath = [System.IO.Path]::GetFullPath((Join-Path $HOME ".claw-deploy\bin\openclaw.cmd"))
+  $commands = Get-Command openclaw -All -ErrorAction SilentlyContinue
+
+  # 跳过我们自己生成的 shim，避免二次执行时把 shim 再包装成指向自身的入口。
+  foreach ($command in $commands) {
+    $candidate = [System.IO.Path]::GetFullPath($command.Source)
+    if ($candidate -ne $shimPath) {
+      return $candidate
+    }
   }
 
   $npm = Get-Command npm -ErrorAction SilentlyContinue
@@ -83,6 +89,10 @@ function Ensure-OpenClawCommand {
 
   $shimDir = Join-Path $HOME ".claw-deploy\bin"
   $shimPath = Join-Path $shimDir "openclaw.cmd"
+
+  if ([System.IO.Path]::GetFullPath($OpenClawPath) -eq [System.IO.Path]::GetFullPath($shimPath)) {
+    return
+  }
 
   New-Item -ItemType Directory -Path $shimDir -Force | Out-Null
 

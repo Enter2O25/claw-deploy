@@ -218,7 +218,9 @@ export async function buildShellEnv(extraEnv = {}) {
     if (env.APPDATA) {
       pathEntries.add(path.join(env.APPDATA, "npm"));
     }
+    pathEntries.add(path.join(os.homedir(), ".claw-deploy", "bin"));
   } else {
+    pathEntries.add(path.join(os.homedir(), ".local", "bin"));
     pathEntries.add(path.join(os.homedir(), ".npm-global", "bin"));
     pathEntries.add(path.join(os.homedir(), ".openclaw", "bin"));
   }
