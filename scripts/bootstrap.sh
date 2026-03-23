@@ -53,4 +53,10 @@ fi
 
 print_step "步骤 3/3" "启动部署向导"
 echo "  ✓ Node.js ${node_major} 已就绪"
+
+# 通过 curl | bash 运行时，stdin 会变成已结束的 pipe，这里只在当前会话确实绑定终端时再接回 tty。
+if [ ! -t 0 ] && [ -t 1 ] && [ -r /dev/tty ]; then
+  exec </dev/tty
+fi
+
 exec "${node_path}" "${TARGET_SCRIPT}" "$@"

@@ -14,6 +14,7 @@
 
 其余动作全部由向导自动执行：
 
+- 从当前 OpenClaw 版本动态拉取最新模型目录
 - 检测 Node / npm / OpenClaw 是否可用
 - 缺少环境时调用 OpenClaw 官方安装脚本补齐
 - 以非交互模式执行 `openclaw onboard`
@@ -52,13 +53,13 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash -s -- --model openai-gpt-5-2 --bot dashboard --api-key sk-xxxx --yes
+curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash -s -- --model openai/gpt-5.4 --bot dashboard --api-key sk-xxxx --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content)) --model openai-gpt-5-2 --bot dashboard --api-key sk-xxxx --yes"
+powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content)) --model openai/gpt-5.4 --bot dashboard --api-key sk-xxxx --yes"
 ```
 
 ### 交互式一条命令
@@ -89,13 +90,13 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 macOS / Linux:
 
 ```bash
-bash install.sh --model openai-gpt-5-2 --api-key sk-xxxx --bot dashboard --yes
+bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot dashboard --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --api-key sk-xxxx --bot dashboard --yes
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot dashboard --yes
 ```
 
 这适合后续做成官网复制命令、远程安装或自动化发放脚本。
@@ -105,13 +106,24 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --
 macOS / Linux:
 
 ```bash
-bash install.sh --model openai-gpt-5-2 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
+bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
+
+## 模型选择说明
+
+- 交互模式下，脚本会先调用 `openclaw models list --all --plain` 拉取当前版本支持的最新模型目录。
+- 为了保持“只输入一个 API Key”这一目标，终端里会展示当前脚本可一键接入的提供商及其全部模型。
+- `--model` 参数建议直接传完整模型引用，例如：
+  - `openai/gpt-5.4`
+  - `anthropic/claude-sonnet-4-5`
+  - `google/gemini-2.5-pro`
+  - `openrouter/openai/gpt-5.4`
+- 为兼容旧版本脚本，`openai-gpt-5-2` 这类历史短 id 仍然可以识别，但不再推荐继续使用。
 ```
 
 ## 当前极简模式支持
@@ -144,15 +156,17 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --
 - [scripts/deploy.js](/Users/liujinglong/my/project/claw-deploy/scripts/deploy.js)
   - 终端交互式部署脚本
   - 支持 `--model`、`--api-key`、`--bot`、`--telegram-bot-token`、`--yes`、`--dry-run`
+  - `--model` 推荐使用完整模型引用 `provider/model`
 - [scripts/bootstrap.sh](/Users/liujinglong/my/project/claw-deploy/scripts/bootstrap.sh)
   - macOS / Linux 自举脚本
   - 缺少 Node 22+ 时先自动补环境
+  - 在 `curl | bash` 场景下会主动把 stdin 接回当前终端
 - [scripts/bootstrap.ps1](/Users/liujinglong/my/project/claw-deploy/scripts/bootstrap.ps1)
   - Windows PowerShell 自举脚本
   - 缺少 Node 22+ 时先自动补环境
 - [core.js](/Users/liujinglong/my/project/claw-deploy/core.js)
   - 部署能力核心模块
-  - 负责环境探测、部署编排和日志脱敏
+  - 负责环境探测、最新模型目录拉取、部署编排和日志脱敏
 
 ## 实现假设
 

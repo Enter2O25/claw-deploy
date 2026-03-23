@@ -1,21 +1,103 @@
 #!/usr/bin/env node
-import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { spawn } from "node:child_process";
+import { openSync, closeSync } from "node:fs";
+import { ReadStream, WriteStream } from "node:tty";
 import {
   BOT_CATALOG,
-  MODEL_CATALOG,
   buildDeploymentPlan,
   buildShellEnv,
   detectEnvironment,
+  loadModelCatalog,
+  resolveModelRef,
   sanitizeLog,
 } from "../core.js";
 
-const models = Object.values(MODEL_CATALOG);
 const bots = Object.values(BOT_CATALOG);
 const CREDENTIAL_ARG_MAP = {
   "--telegram-bot-token": "telegramBotToken",
 };
+
+function createInteractiveTerminal() {
+  if (input.isTTY && output.isTTY) {
+    return {
+      input,
+      output,
+      cleanup() {},
+    };
+  }
+
+  const inputPath = process.platform === "win32" ? "CONIN$" : "/dev/tty";
+  const outputPath = process.platform === "win32" ? "CONOUT$" : "/dev/tty";
+
+  try {
+    const inputFd = openSync(inputPath, "r");
+    const outputFd = openSync(outputPath, "w");
+
+    return {
+      input: new ReadStream(inputFd),
+      output: new WriteStream(outputFd),
+      cleanup() {
+        closeSync(inputFd);
+        closeSync(outputFd);
+      },
+    };
+  } catch {
+    return {
+      input,
+      output,
+      cleanup() {},
+    };
+  }
+}
+
+/**
+ * 普通文本输入尽量不碰 raw mode，避免某些服务器终端对 setRawMode 支持不稳定。
+ */
+async function promptLine(question, terminal) {
+  terminal.output.write(question);
+  terminal.input.resume();
+  terminal.input.setEncoding("utf8");
+
+  return new Promise((resolve) => {
+    let buffer = "";
+
+    const cleanup = () => {
+      terminal.input.removeListener("data", onData);
+      terminal.input.removeListener("end", onEnd);
+    };
+
+    const finish = (value) => {
+      cleanup();
+      resolve(value.trim());
+    };
+
+    const onEnd = () => {
+      terminal.output.write("\n");
+      finish(buffer);
+    };
+
+    const onData = (chunk) => {
+      const value = String(chunk);
+
+      if (value.includes("\u0003")) {
+        terminal.output.write("\n已取消部署。\n");
+        process.exit(1);
+      }
+
+      buffer += value;
+      if (!buffer.includes("\n") && !buffer.includes("\r")) {
+        return;
+      }
+
+      terminal.output.write("\n");
+      finish(buffer.replace(/[\r\n]+$/, ""));
+    };
+
+    terminal.input.on("data", onData);
+    terminal.input.on("end", onEnd);
+  });
+}
 
 /**
  * 解析命令行参数，既支持纯交互，也支持自动化场景直接传参。
@@ -81,17 +163,21 @@ function renderChoices(title, items, describe) {
   });
 }
 
+function getChoiceIdentity(item) {
+  return item.id || item.ref || "";
+}
+
 /**
  * 读取编号选择，并把输入映射为具体配置项。
  */
-async function promptChoice(rl, title, items, describe, fallbackId = "") {
+async function promptChoice(terminal, title, items, describe, fallbackId = "") {
   renderChoices(title, items, describe);
 
   while (true) {
-    const answer = (await rl.question(`请输入编号${fallbackId ? `，直接回车默认 ${fallbackId}` : ""}：`)).trim();
+    const answer = (await promptLine(`请输入编号${fallbackId ? `，直接回车默认 ${fallbackId}` : ""}：`, terminal)).trim();
 
     if (!answer && fallbackId) {
-      return items.find((item) => item.id === fallbackId);
+      return items.find((item) => getChoiceIdentity(item) === fallbackId);
     }
 
     const numericIndex = Number(answer);
@@ -99,7 +185,7 @@ async function promptChoice(rl, title, items, describe, fallbackId = "") {
       return items[numericIndex - 1];
     }
 
-    const byId = items.find((item) => item.id === answer);
+    const byId = items.find((item) => getChoiceIdentity(item) === answer);
     if (byId) {
       return byId;
     }
@@ -111,36 +197,43 @@ async function promptChoice(rl, title, items, describe, fallbackId = "") {
 /**
  * 通过 raw mode 隐藏 API Key 回显，避免在终端里直接泄露凭证。
  */
-async function promptSecret(question) {
-  if (!input.isTTY || typeof input.setRawMode !== "function") {
-    const fallbackRl = readline.createInterface({ input, output });
-    const answer = await fallbackRl.question(question);
-    fallbackRl.close();
-    return answer.trim();
+async function promptSecret(question, terminal) {
+  if (!terminal.input.isTTY || typeof terminal.input.setRawMode !== "function") {
+    return promptLine(question, terminal);
   }
 
   return new Promise((resolve) => {
     const chunks = [];
+    let rawModeEnabled = false;
 
-    output.write(question);
-    input.setRawMode(true);
-    input.resume();
-    input.setEncoding("utf8");
+    terminal.output.write(question);
+    try {
+      terminal.input.setRawMode(true);
+      rawModeEnabled = true;
+      terminal.input.resume();
+      terminal.input.setEncoding("utf8");
+    } catch {
+      terminal.output.write("\n");
+      resolve(promptLine("", terminal));
+      return;
+    }
 
     const onData = (chunk) => {
       const value = String(chunk);
 
       if (value === "\r" || value === "\n") {
-        output.write("\n");
-        input.setRawMode(false);
-        input.pause();
-        input.removeListener("data", onData);
+        terminal.output.write("\n");
+        if (rawModeEnabled) {
+          terminal.input.setRawMode(false);
+        }
+        terminal.input.pause();
+        terminal.input.removeListener("data", onData);
         resolve(chunks.join("").trim());
         return;
       }
 
       if (value === "\u0003") {
-        output.write("\n已取消部署。\n");
+        terminal.output.write("\n已取消部署。\n");
         process.exit(1);
       }
 
@@ -152,7 +245,7 @@ async function promptSecret(question) {
       chunks.push(value);
     };
 
-    input.on("data", onData);
+    terminal.input.on("data", onData);
   });
 }
 
@@ -167,6 +260,17 @@ function printSummary(selection) {
     console.log(`  额外凭证: ${selection.bot.credentialFields.map((field) => field.label).join("、")}`);
   }
   console.log("  自动动作: 环境检测 -> 安装/修复 -> onboard -> 默认配置 -> 状态校验");
+}
+
+function printModelCatalogSummary(catalog) {
+  if (catalog.source === "openclaw") {
+    console.log(
+      `已从 OpenClaw 拉取最新模型目录：共发现 ${catalog.totalCount} 个模型，当前脚本可一键接入其中 ${catalog.availableCount} 个。`,
+    );
+    return;
+  }
+
+  console.log("未能读取 OpenClaw 在线模型目录，已退回到内置保底模型列表。");
 }
 
 /**
@@ -234,7 +338,7 @@ async function runPlan(plan, secrets) {
 /**
  * 根据所选渠道收集必要凭证，避免把 Telegram 这类特殊要求硬编码到主流程里。
  */
-async function collectBotCredentials(rl, args, bot) {
+async function collectBotCredentials(args, bot, terminal) {
   const values = {};
 
   for (const field of bot.credentialFields || []) {
@@ -242,11 +346,9 @@ async function collectBotCredentials(rl, args, bot) {
 
     if (!value) {
       if (field.secret) {
-        rl.pause();
-        value = await promptSecret(`请输入 ${field.label}: `);
-        rl.resume();
+        value = await promptSecret(`请输入 ${field.label}: `, terminal);
       } else {
-        value = (await rl.question(`请输入 ${field.label}: `)).trim();
+        value = (await promptLine(`请输入 ${field.label}: `, terminal)).trim();
       }
     }
 
@@ -256,11 +358,70 @@ async function collectBotCredentials(rl, args, bot) {
   return values;
 }
 
+function findModelByRef(catalog, modelRef) {
+  for (const provider of catalog.providers) {
+    const found = provider.models.find((model) => model.ref === modelRef);
+    if (found) {
+      return { provider, model: found };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 模型数量会随着 OpenClaw 版本增长，因此改成运行时拉取并按提供商分组选择。
+ */
+async function selectModel(terminal, args) {
+  const catalog = await loadModelCatalog();
+  const requestedRef = resolveModelRef(args.modelId);
+
+  printModelCatalogSummary(catalog);
+
+  if (requestedRef) {
+    const resolved = findModelByRef(catalog, requestedRef);
+    if (!resolved) {
+      throw new Error(`未在当前 OpenClaw 模型目录中找到 ${requestedRef}。`);
+    }
+
+    return {
+      provider: resolved.provider,
+      model: resolved.model,
+      catalog,
+    };
+  }
+
+  const provider = await promptChoice(
+    terminal,
+    "请选择模型提供商",
+    catalog.providers,
+    (item) => `${item.label} - ${item.count} 个模型 - ${item.hint}`,
+    "openai",
+  );
+
+  const defaultModelRef = provider.preferredModels.find((ref) => provider.models.some((model) => model.ref === ref));
+  const defaultModel = provider.models.find((model) => model.ref === defaultModelRef) || provider.models[0];
+  const model = await promptChoice(
+    terminal,
+    `请选择 ${provider.label} 模型`,
+    provider.models,
+    (item) => item.ref,
+    defaultModel?.ref || "",
+  );
+
+  return {
+    provider,
+    model,
+    catalog,
+  };
+}
+
 /**
  * 终端模式的主流程，只保留最少问题，其余全部自动化。
  */
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const terminal = createInteractiveTerminal();
 
   console.log("OpenClaw 极简部署脚本");
   console.log("默认只需要选择模型、输入 API Key、选择聊天机器人；若选 Telegram，会额外要求一个 Bot Token。");
@@ -268,18 +429,15 @@ async function main() {
   const environment = await detectEnvironment();
   printEnvironment(environment);
 
-  const rl = readline.createInterface({ input, output });
-
   try {
-    const model =
-      models.find((item) => item.id === args.modelId) ||
-      (await promptChoice(
-        rl,
-        "请选择模型",
-        models,
-        (item) => `${item.provider} / ${item.label} - ${item.hint}`,
-        "openai-gpt-5-2",
-      ));
+    const selection = await selectModel(terminal, args);
+    const model = {
+      id: selection.model.ref,
+      provider: selection.provider.label,
+      label: selection.model.label,
+      modelRef: selection.model.ref,
+      keyLabel: selection.provider.keyLabel,
+    };
 
     const bot =
       bots.find((item) => item.id === args.botId) ||
@@ -294,18 +452,16 @@ async function main() {
     let apiKey = args.apiKey;
 
     if (!apiKey) {
-      rl.pause();
-      apiKey = await promptSecret(`请输入 ${model.provider} 的 API Key: `);
-      rl.resume();
+      apiKey = await promptSecret(`请输入 ${model.keyLabel}: `, terminal);
     }
 
-    const botCredentials = await collectBotCredentials(rl, args, bot);
-    const selection = { model, bot, apiKey, botCredentials };
+    const botCredentials = await collectBotCredentials(args, bot, terminal);
+    const summarySelection = { model, bot, apiKey, botCredentials };
 
-    printSummary(selection);
+    printSummary(summarySelection);
 
     if (!args.yes) {
-      const confirm = (await rl.question("确认开始部署吗？(Y/n): ")).trim().toLowerCase();
+      const confirm = (await promptLine("确认开始部署吗？(Y/n): ", terminal)).trim().toLowerCase();
       if (confirm && confirm !== "y" && confirm !== "yes") {
         console.log("已取消部署。");
         return;
@@ -313,7 +469,7 @@ async function main() {
     }
 
     const plan = buildDeploymentPlan(environment, {
-      modelId: model.id,
+      modelRef: model.modelRef,
       apiKey,
       botId: bot.id,
       ...botCredentials,
@@ -336,7 +492,7 @@ async function main() {
       console.log(`- ${note}`);
     }
   } finally {
-    rl.close();
+    terminal.cleanup();
   }
 }
 

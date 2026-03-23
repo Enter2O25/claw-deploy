@@ -6,58 +6,146 @@ import { spawn } from "node:child_process";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const MODEL_CATALOG = {
-  "anthropic-sonnet-4-5": {
-    id: "anthropic-sonnet-4-5",
-    provider: "Anthropic",
-    label: "Claude Sonnet 4.5",
-    modelRef: "anthropic/claude-sonnet-4-5",
-    authChoice: "anthropic-api-key",
-    keyFlag: "--anthropic-api-key",
-    placeholder: "sk-ant-api03-...",
-    hint: "适合稳定的高质量日常聊天与任务执行。",
-  },
-  "openai-gpt-5-2": {
-    id: "openai-gpt-5-2",
-    provider: "OpenAI",
-    label: "GPT-5.2",
-    modelRef: "openai/gpt-5.2",
+export const PROVIDER_CATALOG = {
+  openai: {
+    id: "openai",
+    label: "OpenAI",
     authChoice: "openai-api-key",
     keyFlag: "--openai-api-key",
+    keyLabel: "OpenAI API Key",
     placeholder: "sk-...",
-    hint: "工具调用和综合能力均衡，适合通用助手。",
+    hint: "适合 GPT 系列模型与通用助手场景。",
+    preferredModels: ["openai/gpt-5.4", "openai/gpt-5.4-pro", "openai/gpt-5.2"],
   },
-  "gemini-2-5-pro": {
-    id: "gemini-2-5-pro",
-    provider: "Google",
-    label: "Gemini 2.5 Pro",
-    modelRef: "gemini/gemini-2.5-pro",
+  anthropic: {
+    id: "anthropic",
+    label: "Anthropic",
+    keyFlag: "--anthropic-api-key",
+    keyLabel: "Anthropic API Key",
+    placeholder: "sk-ant-...",
+    hint: "适合 Claude 系列模型与高质量长文本任务。",
+    preferredModels: ["anthropic/claude-opus-4-6", "anthropic/claude-sonnet-4-5"],
+  },
+  google: {
+    id: "google",
+    label: "Google Gemini",
     authChoice: "gemini-api-key",
     keyFlag: "--gemini-api-key",
+    keyLabel: "Gemini API Key",
     placeholder: "AIza...",
-    hint: "多模态能力较强，适合资料整理和分析。",
+    hint: "适合 Gemini 系列模型与多模态场景。",
+    preferredModels: ["google/gemini-3-pro-preview", "google/gemini-2.5-pro"],
   },
-  "zai-glm-5": {
-    id: "zai-glm-5",
-    provider: "Z.AI",
-    label: "GLM-5",
-    modelRef: "zai/glm-5",
+  zai: {
+    id: "zai",
+    label: "Z.AI",
     authChoice: "zai-api-key",
     keyFlag: "--zai-api-key",
+    keyLabel: "Z.AI API Key",
     placeholder: "zai_...",
-    hint: "中文体验更自然，适合本地化助手场景。",
+    hint: "适合 GLM 系列与中文本地化场景。",
+    preferredModels: ["zai/glm-5", "zai/glm-4.7"],
   },
-  "huggingface-deepseek-r1": {
-    id: "huggingface-deepseek-r1",
-    provider: "Hugging Face",
-    label: "DeepSeek-R1",
-    modelRef: "huggingface/deepseek-ai/DeepSeek-R1",
+  huggingface: {
+    id: "huggingface",
+    label: "Hugging Face",
     authChoice: "huggingface-api-key",
     keyFlag: "--huggingface-api-key",
+    keyLabel: "Hugging Face Token",
     placeholder: "hf_...",
-    hint: "适合已有 Hugging Face Token 的低门槛接入。",
+    hint: "适合通过 Hugging Face 路由访问多种开源模型。",
+    preferredModels: ["huggingface/deepseek-ai/DeepSeek-R1"],
+  },
+  together: {
+    id: "together",
+    label: "Together AI",
+    authChoice: "together-api-key",
+    keyFlag: "--together-api-key",
+    keyLabel: "Together API Key",
+    placeholder: "sk-...",
+    hint: "适合一把 API Key 访问大量开源模型。",
+    preferredModels: ["together/moonshotai/Kimi-K2.5", "together/deepseek-ai/DeepSeek-R1"],
+  },
+  mistral: {
+    id: "mistral",
+    label: "Mistral",
+    authChoice: "mistral-api-key",
+    keyFlag: "--mistral-api-key",
+    keyLabel: "Mistral API Key",
+    placeholder: "sk-...",
+    hint: "适合 Mistral 自家模型与欧盟数据驻留场景。",
+    preferredModels: ["mistral/mistral-large-latest"],
+  },
+  moonshot: {
+    id: "moonshot",
+    label: "Moonshot AI",
+    authChoice: "moonshot-api-key",
+    keyFlag: "--moonshot-api-key",
+    keyLabel: "Moonshot API Key",
+    placeholder: "sk-...",
+    hint: "适合 Kimi 官方 API 与长上下文推理场景。",
+    preferredModels: ["moonshot/kimi-k2.5", "moonshot/kimi-k2-thinking"],
+  },
+  "kimi-coding": {
+    id: "kimi-coding",
+    label: "Kimi Coding",
+    authChoice: "kimi-code-api-key",
+    keyFlag: "--kimi-code-api-key",
+    keyLabel: "Kimi Coding API Key",
+    placeholder: "sk-...",
+    hint: "适合 Moonshot 专门面向代码场景的 Kimi Coding 目录。",
+    preferredModels: ["kimi-coding/k2p5"],
+  },
+  opencode: {
+    id: "opencode",
+    label: "OpenCode Zen",
+    authChoice: "opencode-zen",
+    keyFlag: "--opencode-zen-api-key",
+    keyLabel: "OpenCode API Key",
+    placeholder: "sk-...",
+    hint: "适合使用 OpenCode 提供的 Zen 模型目录。",
+    preferredModels: ["opencode/claude-opus-4-6", "opencode/gpt-5.2"],
+  },
+  "opencode-go": {
+    id: "opencode-go",
+    label: "OpenCode Go",
+    authChoice: "opencode-go",
+    keyFlag: "--opencode-go-api-key",
+    keyLabel: "OpenCode API Key",
+    placeholder: "sk-...",
+    hint: "适合使用 OpenCode 托管的 Kimi/GLM/MiniMax 目录。",
+    preferredModels: ["opencode-go/kimi-k2.5", "opencode-go/glm-5"],
+  },
+  openrouter: {
+    id: "openrouter",
+    label: "OpenRouter",
+    authChoice: "apiKey",
+    tokenProvider: "openrouter",
+    keyLabel: "OpenRouter API Key",
+    placeholder: "sk-or-...",
+    hint: "适合一把 API Key 访问大量第三方模型目录。",
+    preferredModels: ["openrouter/anthropic/claude-sonnet-4-5", "openrouter/openai/gpt-5.4"],
+  },
+  synthetic: {
+    id: "synthetic",
+    label: "Synthetic",
+    authChoice: "synthetic-api-key",
+    keyFlag: "--synthetic-api-key",
+    keyLabel: "Synthetic API Key",
+    placeholder: "sk-...",
+    hint: "适合通过 Synthetic 访问兼容 Anthropic 的聚合模型目录。",
+    preferredModels: ["synthetic/hf:MiniMaxAI/MiniMax-M2.5"],
   },
 };
+
+const FALLBACK_MODEL_OPTIONS = Object.values(PROVIDER_CATALOG).flatMap((provider) =>
+  provider.preferredModels.map((modelRef) => ({
+    ref: modelRef,
+    providerId: provider.id,
+    providerLabel: provider.label,
+    label: modelRef.split("/").slice(1).join("/"),
+  })),
+);
 
 export const BOT_CATALOG = {
   dashboard: {
@@ -90,6 +178,18 @@ export const BOT_CATALOG = {
     ],
   },
 };
+
+function buildLegacyModelAliases() {
+  return {
+    "anthropic-sonnet-4-5": "anthropic/claude-sonnet-4-5",
+    "openai-gpt-5-2": "openai/gpt-5.2",
+    "gemini-2-5-pro": "google/gemini-2.5-pro",
+    "zai-glm-5": "zai/glm-5",
+    "huggingface-deepseek-r1": "huggingface/deepseek-ai/DeepSeek-R1",
+  };
+}
+
+export const LEGACY_MODEL_ALIASES = buildLegacyModelAliases();
 
 /**
  * 统一补齐常见安装路径，避免安装脚本刚写入 PATH 时当前进程还感知不到。
@@ -242,6 +342,134 @@ export async function detectEnvironment() {
 }
 
 /**
+ * 把用户输入统一映射成标准模型引用，兼容旧版短 id 与完整 provider/model 形式。
+ */
+export function resolveModelRef(input) {
+  const raw = String(input || "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  if (LEGACY_MODEL_ALIASES[raw]) {
+    return LEGACY_MODEL_ALIASES[raw];
+  }
+
+  return raw;
+}
+
+/**
+ * 解析 OpenClaw 返回的一行模型引用，并过滤掉当前一键脚本无法自动配置鉴权的提供商。
+ */
+function parseModelLine(line) {
+  const ref = String(line || "").trim();
+
+  if (!ref.includes("/")) {
+    return null;
+  }
+
+  const providerId = ref.split("/")[0].toLowerCase();
+  const provider = PROVIDER_CATALOG[providerId];
+
+  if (!provider) {
+    return null;
+  }
+
+  return {
+    ref,
+    providerId,
+    providerLabel: provider.label,
+    label: ref.split("/").slice(1).join("/"),
+  };
+}
+
+function sortModelsForProvider(provider, models) {
+  const preferredOrder = new Map((provider.preferredModels || []).map((ref, index) => [ref, index]));
+
+  return [...models].sort((left, right) => {
+    const leftPreferred = preferredOrder.has(left.ref) ? preferredOrder.get(left.ref) : Number.POSITIVE_INFINITY;
+    const rightPreferred = preferredOrder.has(right.ref) ? preferredOrder.get(right.ref) : Number.POSITIVE_INFINITY;
+
+    if (leftPreferred !== rightPreferred) {
+      return leftPreferred - rightPreferred;
+    }
+
+    return left.label.localeCompare(right.label, "en");
+  });
+}
+
+/**
+ * 从已安装的 OpenClaw 动态拉取最新模型目录；失败时退回到内置保底列表。
+ */
+export async function loadModelCatalog() {
+  const env = await buildShellEnv();
+  const customCommand = process.env.CLAW_DEPLOY_MODELS_COMMAND;
+  const result = customCommand
+    ? await execCommand("bash", ["-lc", customCommand], { env, allowFailure: true })
+    : await execCommand("openclaw", ["models", "list", "--all", "--plain"], { env, allowFailure: true });
+
+  const rawLines = result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const dynamicModels = Array.from(
+    new Map(
+      rawLines
+        .map(parseModelLine)
+        .filter(Boolean)
+        .map((model) => [model.ref, model]),
+    ).values(),
+  );
+
+  if (!dynamicModels.length) {
+    const fallbackProviders = Object.values(PROVIDER_CATALOG)
+      .map((provider) => {
+        const models = sortModelsForProvider(
+          provider,
+          FALLBACK_MODEL_OPTIONS.filter((model) => model.providerId === provider.id),
+        );
+
+        return {
+          ...provider,
+          count: models.length,
+          models,
+        };
+      })
+      .filter((provider) => provider.count > 0);
+
+    return {
+      source: "fallback",
+      totalCount: FALLBACK_MODEL_OPTIONS.length,
+      availableCount: FALLBACK_MODEL_OPTIONS.length,
+      providers: fallbackProviders,
+    };
+  }
+
+  const providers = Object.values(PROVIDER_CATALOG)
+    .map((provider) => {
+      const models = sortModelsForProvider(
+        provider,
+        dynamicModels.filter((model) => model.providerId === provider.id),
+      );
+
+      return {
+        ...provider,
+        count: models.length,
+        models,
+      };
+    })
+    .filter((provider) => provider.count > 0);
+
+  return {
+    source: "openclaw",
+    totalCount: rawLines.length,
+    availableCount: dynamicModels.length,
+    providers,
+  };
+}
+
+/**
  * 生成官方安装脚本步骤，优先复用 OpenClaw 官方安装器来处理缺失环境。
  */
 function buildInstallerStep() {
@@ -272,10 +500,12 @@ function buildInstallerStep() {
  * 只暴露极简输入项，因此这里固定好安全默认值和标准化的部署动作。
  */
 export function buildDeploymentPlan(envState, payload) {
-  const model = MODEL_CATALOG[payload.modelId];
+  const modelRef = resolveModelRef(payload.modelRef || payload.modelId);
+  const providerId = modelRef.split("/")[0]?.toLowerCase();
+  const provider = PROVIDER_CATALOG[providerId];
   const bot = BOT_CATALOG[payload.botId];
 
-  if (!model || !bot) {
+  if (!modelRef || !provider || !bot) {
     throw new Error("无效的模型或聊天机器人选择。");
   }
 
@@ -295,34 +525,14 @@ export function buildDeploymentPlan(envState, payload) {
     id: "onboard",
     title: "写入模型鉴权并执行 OpenClaw 初始配置",
     command: "openclaw",
-    args: [
-      "onboard",
-      "--non-interactive",
-      "--mode",
-      "local",
-      "--auth-choice",
-      model.authChoice,
-      model.keyFlag,
-      payload.apiKey,
-      "--secret-input-mode",
-      "plaintext",
-      "--gateway-port",
-      "18789",
-      "--gateway-bind",
-      "loopback",
-      "--install-daemon",
-      "--daemon-runtime",
-      "node",
-      "--skip-skills",
-      "--accept-risk",
-    ],
+    args: buildOnboardArgs(provider, payload.apiKey),
   });
 
   steps.push({
     id: "set-model",
     title: "设置默认模型",
     command: "openclaw",
-    args: ["config", "set", "agents.defaults.model.primary", JSON.stringify(model.modelRef), "--strict-json"],
+    args: ["config", "set", "agents.defaults.model.primary", JSON.stringify(modelRef), "--strict-json"],
   });
 
   steps.push({
@@ -435,11 +645,56 @@ export function buildDeploymentPlan(envState, payload) {
   });
 
   return {
-    model,
+    model: {
+      modelRef,
+      provider: provider.label,
+      label: modelRef.split("/").slice(1).join("/"),
+      providerId,
+      keyLabel: provider.keyLabel,
+    },
     bot,
     steps,
     postDeployNotes: buildPostDeployNotes(payload.botId),
   };
+}
+
+/**
+ * 根据不同模型提供商拼装 OpenClaw 的非交互 onboarding 参数。
+ */
+function buildOnboardArgs(provider, apiKey) {
+  const args = [
+    "onboard",
+    "--non-interactive",
+    "--mode",
+    "local",
+    "--secret-input-mode",
+    "plaintext",
+    "--gateway-port",
+    "18789",
+    "--gateway-bind",
+    "loopback",
+    "--install-daemon",
+    "--daemon-runtime",
+    "node",
+    "--skip-skills",
+    "--accept-risk",
+  ];
+
+  if (provider.authChoice) {
+    args.push("--auth-choice", provider.authChoice);
+  }
+
+  if (provider.tokenProvider) {
+    args.push("--token-provider", provider.tokenProvider, "--token", apiKey);
+    return args;
+  }
+
+  if (!provider.keyFlag) {
+    throw new Error(`当前脚本暂不支持 ${provider.label} 的一键鉴权参数。`);
+  }
+
+  args.push(provider.keyFlag, apiKey);
+  return args;
 }
 
 /**
