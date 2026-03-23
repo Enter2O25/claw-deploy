@@ -24,6 +24,42 @@
 
 ## 推荐用法
 
+### 远程一键命令
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content))"
+```
+
+这两个入口会自动：
+
+- 下载当前仓库代码
+- 安装到默认目录
+  - macOS / Linux: `~/.claw-deploy`
+  - Windows: `$HOME\.claw-deploy`
+- 再调用本地部署脚本继续执行
+
+如果要远程传参，也支持直接透传：
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.sh | bash -s -- --model openai-gpt-5-2 --bot dashboard --api-key sk-xxxx --yes
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/Enter2O25/claw-deploy/main/install.ps1' -UseBasicParsing).Content)) --model openai-gpt-5-2 --bot dashboard --api-key sk-xxxx --yes"
+```
+
 ### 交互式一条命令
 
 macOS / Linux:
@@ -100,8 +136,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --
 
 - [install.sh](/Users/liujinglong/my/project/claw-deploy/install.sh)
   - macOS / Linux 主入口
+  - 支持本地执行和 `curl | bash` 远程执行
 - [install.ps1](/Users/liujinglong/my/project/claw-deploy/install.ps1)
   - Windows PowerShell 主入口
+  - 支持本地执行和远程 `Invoke-WebRequest` 在线执行
 - [scripts/deploy.js](/Users/liujinglong/my/project/claw-deploy/scripts/deploy.js)
   - 终端交互式部署脚本
   - 支持 `--model`、`--api-key`、`--bot`、`--telegram-bot-token`、`--yes`、`--dry-run`
@@ -125,6 +163,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai-gpt-5-2 --
 - WhatsApp 允许保留最后一步扫码登录，因为它不是额外文本输入，仍符合“极简输入”的目标。
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。
-- 如果后续把 `install.sh` / `install.ps1` 发布到可访问地址，就可以直接包装成真正的远程一键命令：
-  - `curl -fsSL https://your-domain/install.sh | bash`
-  - `powershell -ExecutionPolicy Bypass -Command "iwr https://your-domain/install.ps1 -UseBasicParsing | iex"`
+- 远程安装入口默认从 GitHub Raw 下载当前脚本，再从 GitHub 仓库归档下载完整代码。
+- 如需切换仓库、分支或安装目录，可覆盖下面这些环境变量：
+  - `CLAW_DEPLOY_REPOSITORY`
+  - `CLAW_DEPLOY_REF`
+  - `CLAW_DEPLOY_HOME`
+  - `CLAW_DEPLOY_ARCHIVE_URL`

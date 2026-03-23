@@ -1,3 +1,64 @@
 $ErrorActionPreference = "Stop"
-$rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-& (Join-Path $rootDir "scripts\bootstrap.ps1") @args
+
+# 既支持本地仓库直接执行，也支持远程 Invoke-Expression 在线拉起。
+$scriptDir = $null
+if ($PSCommandPath) {
+  $scriptDir = Split-Path -Parent $PSCommandPath
+}
+
+if ($scriptDir -and (Test-Path (Join-Path $scriptDir "scripts\bootstrap.ps1"))) {
+  & (Join-Path $scriptDir "scripts\bootstrap.ps1") @args
+  exit $LASTEXITCODE
+}
+
+$repository = if ($env:CLAW_DEPLOY_REPOSITORY) { $env:CLAW_DEPLOY_REPOSITORY } else { "Enter2O25/claw-deploy" }
+$refName = if ($env:CLAW_DEPLOY_REF) { $env:CLAW_DEPLOY_REF } else { "main" }
+$installHome = if ($env:CLAW_DEPLOY_HOME) { $env:CLAW_DEPLOY_HOME } else { Join-Path $HOME ".claw-deploy" }
+$archiveUrl = if ($env:CLAW_DEPLOY_ARCHIVE_URL) {
+  $env:CLAW_DEPLOY_ARCHIVE_URL
+} else {
+  "https://github.com/$repository/archive/refs/heads/$refName.zip"
+}
+
+$tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("claw-deploy-" + [System.Guid]::NewGuid().ToString("N"))
+$archiveFile = Join-Path $tmpDir "claw-deploy.zip"
+$extractDir = Join-Path $tmpDir "extract"
+$backupDir = "$installHome.backup"
+
+try {
+  Write-Host "准备下载 $repository@$refName ..."
+  New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+  Invoke-WebRequest -Uri $archiveUrl -OutFile $archiveFile
+  Expand-Archive -Path $archiveFile -DestinationPath $extractDir -Force
+
+  # 既兼容 GitHub 自动归档，也兼容镜像站直接把仓库根目录打进压缩包。
+  $sourceDir = $null
+  if (Test-Path (Join-Path $extractDir "scripts\bootstrap.ps1")) {
+    $sourceDir = Get-Item $extractDir
+  } else {
+    $sourceDir = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+  }
+
+  if (-not $sourceDir -or -not (Test-Path (Join-Path $sourceDir.FullName "scripts\bootstrap.ps1"))) {
+    throw "远程安装包结构不符合预期，缺少 scripts/bootstrap.ps1。"
+  }
+
+  New-Item -ItemType Directory -Path (Split-Path -Parent $installHome) -Force | Out-Null
+
+  if (Test-Path $backupDir) {
+    Remove-Item -Path $backupDir -Recurse -Force
+  }
+
+  if (Test-Path $installHome) {
+    Move-Item -Path $installHome -Destination $backupDir -Force
+  }
+
+  Move-Item -Path $sourceDir.FullName -Destination $installHome -Force
+  Write-Host "代码已安装到 $installHome"
+  & (Join-Path $installHome "scripts\bootstrap.ps1") @args
+  exit $LASTEXITCODE
+} finally {
+  if (Test-Path $tmpDir) {
+    Remove-Item -Path $tmpDir -Recurse -Force
+  }
+}
