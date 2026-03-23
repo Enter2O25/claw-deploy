@@ -707,20 +707,49 @@ function buildOnboardArgs(provider, apiKey) {
  * 为不同渠道生成部署后的下一步说明，减少用户自己查文档的成本。
  */
 function buildPostDeployNotes(botId) {
+  const openclawCommand = getUserFacingOpenClawCommand();
+  const pathHint = getUserFacingPathRefreshHint();
+
   if (botId === "telegram") {
     return [
       "Telegram 已启用。先去 Telegram 私聊你的机器人，发送一条普通消息来触发首个 pairing code。",
-      "如果只发 /start 仍没看到配对码，请先执行 openclaw pairing list telegram 检查待审批请求。",
-      "然后执行：openclaw pairing list telegram",
-      "批准配对码：openclaw pairing approve telegram <CODE>",
+      `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
+      `如果只发 /start 仍没看到配对码，请先执行 ${openclawCommand} pairing list telegram 检查待审批请求。`,
+      `查看待审批请求：${openclawCommand} pairing list telegram`,
+      `批准配对码：${openclawCommand} pairing approve telegram <CODE>`,
     ];
   }
 
   if (botId === "whatsapp") {
-    return ["按日志提示完成 WhatsApp 扫码登录后，即可开始私聊测试。"];
+    return [
+      `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
+      "按日志提示完成 WhatsApp 扫码登录后，即可开始私聊测试。",
+    ];
   }
 
   return [];
+}
+
+/**
+ * 给最终用户输出一个当前终端可直接复制执行的 openclaw 命令入口，避免依赖 shell 重新加载 PATH。
+ */
+function getUserFacingOpenClawCommand() {
+  if (process.platform === "win32") {
+    return `& "${path.join(os.homedir(), ".claw-deploy", "bin", "openclaw.cmd")}"`;
+  }
+
+  return path.join(os.homedir(), ".local", "bin", "openclaw");
+}
+
+/**
+ * 安装脚本会写入 rc 文件，但当前 shell 无法被子进程回写；这里给出一次性立即生效的补 PATH 命令。
+ */
+function getUserFacingPathRefreshHint() {
+  if (process.platform === "win32") {
+    return `$env:Path = "${path.join(os.homedir(), ".claw-deploy", "bin")};" + $env:Path`;
+  }
+
+  return 'export PATH="$HOME/.local/bin:$PATH"';
 }
 
 /**

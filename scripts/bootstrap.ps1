@@ -143,6 +143,6 @@ Write-Step "步骤 3/3" "启动部署向导"
 Write-Host "  ✓ Node.js $nodeMajor 已就绪"
 if ($openclawPath) {
   Write-Host "  ✓ 已配置 openclaw 命令入口"
-  Write-Host "  · 如需在当前终端直接使用 openclaw，请重新打开 PowerShell"
+  Write-Host '  · 如需在当前终端直接使用 openclaw，请执行: $env:Path = "$HOME\.claw-deploy\bin;" + $env:Path'
 }
 & $nodePath $targetScript @args

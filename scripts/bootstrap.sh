@@ -134,7 +134,7 @@ print_step "步骤 3/3" "启动部署向导"
 echo "  ✓ Node.js ${node_major} 已就绪"
 if [ -n "${openclaw_path}" ]; then
   echo "  ✓ 已配置 openclaw 命令入口"
-  echo "  · 如需在当前终端直接使用 openclaw，请执行: source ~/.bashrc"
+  echo '  · 如需在当前终端直接使用 openclaw，请执行: export PATH="$HOME/.local/bin:$PATH"'
 fi
 
 # 通过 curl | bash 运行时，stdin 会变成已结束的 pipe，这里只在当前会话确实绑定终端时再接回 tty。

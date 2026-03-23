@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
 
 如果安装完成后当前终端仍然提示 `openclaw: command not found`：
 
-- Linux / macOS 执行：`source ~/.bashrc`
+- Linux / macOS 执行：`export PATH="$HOME/.local/bin:$PATH"`
 - 或者重新打开一个终端会话
 
 如果要远程传参，也支持直接透传：
@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 - `Telegram`
   - 自动写入 `channels.telegram.enabled`、`botToken`、`dmPolicy=pairing`
   - 默认关闭群消息，先用私聊完成首轮 pairing
-  - 首次接入时先给机器人发一条普通私聊消息，再执行 `openclaw pairing list telegram` / `openclaw pairing approve telegram <CODE>`
+  - 首次接入时先给机器人发一条普通私聊消息，再执行 `~/.local/bin/openclaw pairing list telegram` / `~/.local/bin/openclaw pairing approve telegram <CODE>`
 - `WhatsApp 机器人`
   - 自动写入安全默认值
   - 最后一步进入二维码登录流程
