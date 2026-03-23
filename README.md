@@ -47,6 +47,12 @@ powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-We
   - Windows: `$HOME\.claw-deploy`
 - 再调用本地部署脚本继续执行
 - 安装过程中只展示本脚本自己的步骤提示，不直接暴露官方安装器原始输出
+- 自动补一个稳定的 `openclaw` 命令入口，并写入常见 shell 的 PATH 配置
+
+如果安装完成后当前终端仍然提示 `openclaw: command not found`：
+
+- Linux / macOS 执行：`source ~/.bashrc`
+- 或者重新打开一个终端会话
 
 如果要远程传参，也支持直接透传：
 
