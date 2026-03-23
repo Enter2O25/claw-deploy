@@ -167,6 +167,18 @@ function getChoiceIdentity(item) {
   return item.id || item.ref || "";
 }
 
+function buildModelAuthSummary(provider) {
+  if (provider.setupMode === "onboard-api-key") {
+    return `输入 ${provider.keyLabel} 后，脚本会自动完成一键鉴权。`;
+  }
+
+  if (provider.setupMode === "env-api-key") {
+    return `输入 ${provider.keyLabel} 后，脚本会自动写入 ${provider.envVar}。`;
+  }
+
+  return "该 provider 依赖主机已有登录态或环境凭证，脚本会直接沿用。";
+}
+
 /**
  * 读取编号选择，并把输入映射为具体配置项。
  */
@@ -257,6 +269,9 @@ function printSummary(selection) {
   console.log("\n部署摘要");
   console.log(`  模型: ${selection.model.provider} / ${selection.model.label}`);
   console.log(`  聊天机器人: ${selection.bot.label}`);
+  if (selection.model.authSummary) {
+    console.log(`  模型鉴权: ${selection.model.authSummary}`);
+  }
   if (selection.bot.credentialFields?.length) {
     console.log(`  额外凭证: ${selection.bot.credentialFields.map((field) => field.label).join("、")}`);
   }
@@ -264,9 +279,11 @@ function printSummary(selection) {
 }
 
 function printModelCatalogSummary(catalog) {
+  const automatedProviderCount = catalog.providers.filter((provider) => provider.setupMode !== "preconfigured").length;
+
   if (catalog.source === "openclaw") {
     console.log(
-      `已从 OpenClaw 拉取最新模型目录：共发现 ${catalog.totalCount} 个模型，当前脚本可一键接入其中 ${catalog.availableCount} 个。`,
+      `已从 OpenClaw 拉取最新模型目录：共发现 ${catalog.totalCount} 个模型，当前脚本会展示其中全部 ${catalog.availableCount} 个，已内建自动鉴权能力的 provider 共 ${automatedProviderCount} 个。`,
     );
     return;
   }
@@ -438,6 +455,9 @@ async function main() {
       label: selection.model.label,
       modelRef: selection.model.ref,
       keyLabel: selection.provider.keyLabel,
+      setupMode: selection.provider.setupMode,
+      envVar: selection.provider.envVar,
+      authSummary: buildModelAuthSummary(selection.provider),
     };
 
     const bot =
@@ -452,7 +472,7 @@ async function main() {
 
     let apiKey = args.apiKey;
 
-    if (!apiKey) {
+    if ((selection.provider.setupMode === "onboard-api-key" || selection.provider.setupMode === "env-api-key") && !apiKey) {
       apiKey = await promptSecret(`请输入 ${model.keyLabel}: `, terminal);
     }
 

@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 export const PROVIDER_CATALOG = {
   openai: {
     id: "openai",
+    setupMode: "onboard-api-key",
     label: "OpenAI",
     authChoice: "openai-api-key",
     keyFlag: "--openai-api-key",
@@ -19,6 +20,7 @@ export const PROVIDER_CATALOG = {
   },
   anthropic: {
     id: "anthropic",
+    setupMode: "onboard-api-key",
     label: "Anthropic",
     keyFlag: "--anthropic-api-key",
     keyLabel: "Anthropic API Key",
@@ -28,6 +30,7 @@ export const PROVIDER_CATALOG = {
   },
   google: {
     id: "google",
+    setupMode: "onboard-api-key",
     label: "Google Gemini",
     authChoice: "gemini-api-key",
     keyFlag: "--gemini-api-key",
@@ -38,6 +41,7 @@ export const PROVIDER_CATALOG = {
   },
   zai: {
     id: "zai",
+    setupMode: "onboard-api-key",
     label: "Z.AI",
     authChoice: "zai-api-key",
     keyFlag: "--zai-api-key",
@@ -48,6 +52,7 @@ export const PROVIDER_CATALOG = {
   },
   huggingface: {
     id: "huggingface",
+    setupMode: "onboard-api-key",
     label: "Hugging Face",
     authChoice: "huggingface-api-key",
     keyFlag: "--huggingface-api-key",
@@ -58,6 +63,7 @@ export const PROVIDER_CATALOG = {
   },
   together: {
     id: "together",
+    setupMode: "onboard-api-key",
     label: "Together AI",
     authChoice: "together-api-key",
     keyFlag: "--together-api-key",
@@ -72,6 +78,7 @@ export const PROVIDER_CATALOG = {
   },
   mistral: {
     id: "mistral",
+    setupMode: "onboard-api-key",
     label: "Mistral",
     authChoice: "mistral-api-key",
     keyFlag: "--mistral-api-key",
@@ -82,6 +89,7 @@ export const PROVIDER_CATALOG = {
   },
   moonshot: {
     id: "moonshot",
+    setupMode: "onboard-api-key",
     label: "Moonshot AI",
     authChoice: "moonshot-api-key",
     keyFlag: "--moonshot-api-key",
@@ -92,6 +100,7 @@ export const PROVIDER_CATALOG = {
   },
   "kimi-coding": {
     id: "kimi-coding",
+    setupMode: "onboard-api-key",
     label: "Kimi Coding",
     authChoice: "kimi-code-api-key",
     keyFlag: "--kimi-code-api-key",
@@ -102,6 +111,7 @@ export const PROVIDER_CATALOG = {
   },
   opencode: {
     id: "opencode",
+    setupMode: "onboard-api-key",
     label: "OpenCode Zen",
     authChoice: "opencode-zen",
     keyFlag: "--opencode-zen-api-key",
@@ -112,6 +122,7 @@ export const PROVIDER_CATALOG = {
   },
   "opencode-go": {
     id: "opencode-go",
+    setupMode: "onboard-api-key",
     label: "OpenCode Go",
     authChoice: "opencode-go",
     keyFlag: "--opencode-go-api-key",
@@ -122,6 +133,7 @@ export const PROVIDER_CATALOG = {
   },
   openrouter: {
     id: "openrouter",
+    setupMode: "onboard-api-key",
     label: "OpenRouter",
     authChoice: "apiKey",
     tokenProvider: "openrouter",
@@ -132,6 +144,7 @@ export const PROVIDER_CATALOG = {
   },
   synthetic: {
     id: "synthetic",
+    setupMode: "onboard-api-key",
     label: "Synthetic",
     authChoice: "synthetic-api-key",
     keyFlag: "--synthetic-api-key",
@@ -142,6 +155,7 @@ export const PROVIDER_CATALOG = {
   },
   volcengine: {
     id: "volcengine",
+    setupMode: "onboard-api-key",
     label: "Volcano Engine",
     authChoice: "volcengine-api-key",
     keyFlag: "--volcengine-api-key",
@@ -154,7 +168,151 @@ export const PROVIDER_CATALOG = {
       "volcengine/glm-4-7-251222",
     ],
   },
+  "amazon-bedrock": {
+    id: "amazon-bedrock",
+    setupMode: "preconfigured",
+    label: "Amazon Bedrock",
+    hint: "支持全量 Bedrock 目录；需要主机预先配置 AWS 凭证链与 AWS_REGION。",
+    preferredModels: [
+      "amazon-bedrock/anthropic.claude-sonnet-4-6",
+      "amazon-bedrock/deepseek.v3.2",
+      "amazon-bedrock/moonshotai.kimi-k2.5",
+    ],
+  },
+  "azure-openai-responses": {
+    id: "azure-openai-responses",
+    setupMode: "preconfigured",
+    label: "Azure OpenAI Responses",
+    hint: "支持 Azure OpenAI Responses 目录；需要主机预先配置 Azure endpoint 与认证信息。",
+    preferredModels: ["azure-openai-responses/gpt-5.4", "azure-openai-responses/gpt-5.4-pro"],
+  },
+  cerebras: {
+    id: "cerebras",
+    setupMode: "env-api-key",
+    envVar: "CEREBRAS_API_KEY",
+    label: "Cerebras",
+    keyLabel: "Cerebras API Key",
+    placeholder: "csk-...",
+    hint: "适合使用 Cerebras 托管的开源与 GLM 模型；脚本会自动写入 CEREBRAS_API_KEY。",
+    preferredModels: ["cerebras/gpt-oss-120b", "cerebras/qwen-3-235b-a22b-instruct-2507"],
+  },
+  "github-copilot": {
+    id: "github-copilot",
+    setupMode: "preconfigured",
+    label: "GitHub Copilot",
+    hint: "支持 GitHub Copilot 目录；首次使用前需要先在主机上完成设备登录。",
+    preferredModels: ["github-copilot/gpt-5.4", "github-copilot/claude-sonnet-4.6"],
+  },
+  "google-antigravity": {
+    id: "google-antigravity",
+    setupMode: "preconfigured",
+    label: "Google Antigravity",
+    hint: "支持 Antigravity 目录；首次使用前需要先在主机上完成 OAuth 登录。",
+    preferredModels: ["google-antigravity/gemini-3.1-pro-high", "google-antigravity/claude-sonnet-4-6"],
+  },
+  "google-gemini-cli": {
+    id: "google-gemini-cli",
+    setupMode: "preconfigured",
+    label: "Google Gemini CLI",
+    hint: "支持 Gemini CLI 目录；首次使用前需要先在主机上完成 OAuth 登录。",
+    preferredModels: ["google-gemini-cli/gemini-3.1-pro-preview", "google-gemini-cli/gemini-3-pro-preview"],
+  },
+  "google-vertex": {
+    id: "google-vertex",
+    setupMode: "preconfigured",
+    label: "Google Vertex",
+    hint: "支持 Vertex 目录；需要主机预先配置 gcloud ADC 或服务账号凭证。",
+    preferredModels: ["google-vertex/gemini-3.1-pro-preview", "google-vertex/gemini-3-pro-preview"],
+  },
+  groq: {
+    id: "groq",
+    setupMode: "env-api-key",
+    envVar: "GROQ_API_KEY",
+    label: "Groq",
+    keyLabel: "Groq API Key",
+    placeholder: "gsk_...",
+    hint: "适合低延迟推理；脚本会自动写入 GROQ_API_KEY。",
+    preferredModels: ["groq/openai/gpt-oss-120b", "groq/moonshotai/kimi-k2-instruct"],
+  },
+  minimax: {
+    id: "minimax",
+    setupMode: "env-api-key",
+    envVar: "MINIMAX_API_KEY",
+    label: "MiniMax",
+    keyLabel: "MiniMax API Key",
+    placeholder: "sk-...",
+    hint: "适合 MiniMax 官方目录；脚本会自动写入 MINIMAX_API_KEY。",
+    preferredModels: ["minimax/MiniMax-M2.5", "minimax/MiniMax-M2.1"],
+  },
+  "minimax-cn": {
+    id: "minimax-cn",
+    setupMode: "env-api-key",
+    envVar: "MINIMAX_API_KEY",
+    label: "MiniMax CN",
+    keyLabel: "MiniMax API Key",
+    placeholder: "sk-...",
+    hint: "适合中国区 MiniMax 目录；脚本会复用同一把 MINIMAX_API_KEY。",
+    preferredModels: ["minimax-cn/MiniMax-M2.5", "minimax-cn/MiniMax-M2.1"],
+  },
+  "openai-codex": {
+    id: "openai-codex",
+    setupMode: "preconfigured",
+    label: "OpenAI Codex",
+    hint: "支持 Codex OAuth 目录；首次使用前需要先在主机上完成 OpenAI Codex 登录。",
+    preferredModels: ["openai-codex/gpt-5.4", "openai-codex/gpt-5.3-codex"],
+  },
+  "vercel-ai-gateway": {
+    id: "vercel-ai-gateway",
+    setupMode: "onboard-api-key",
+    label: "Vercel AI Gateway",
+    authChoice: "ai-gateway-api-key",
+    keyFlag: "--ai-gateway-api-key",
+    keyLabel: "AI Gateway API Key",
+    placeholder: "ag_...",
+    hint: "适合用一把 AI Gateway Key 访问大量第三方模型目录。",
+    preferredModels: ["vercel-ai-gateway/openai/gpt-5.4", "vercel-ai-gateway/anthropic/claude-opus-4.6"],
+  },
+  xai: {
+    id: "xai",
+    setupMode: "env-api-key",
+    envVar: "XAI_API_KEY",
+    label: "xAI",
+    keyLabel: "xAI API Key",
+    placeholder: "xai-...",
+    hint: "适合 Grok 系列模型；脚本会自动写入 XAI_API_KEY。",
+    preferredModels: ["xai/grok-4", "xai/grok-code-fast-1"],
+  },
 };
+
+const PROVIDER_ORDER = [
+  "openai",
+  "openai-codex",
+  "anthropic",
+  "google",
+  "google-vertex",
+  "google-gemini-cli",
+  "google-antigravity",
+  "azure-openai-responses",
+  "amazon-bedrock",
+  "zai",
+  "huggingface",
+  "together",
+  "openrouter",
+  "vercel-ai-gateway",
+  "mistral",
+  "moonshot",
+  "kimi-coding",
+  "minimax",
+  "minimax-cn",
+  "groq",
+  "cerebras",
+  "xai",
+  "opencode",
+  "opencode-go",
+  "synthetic",
+  "volcengine",
+  "github-copilot",
+];
 
 const FALLBACK_MODEL_OPTIONS = Object.values(PROVIDER_CATALOG).flatMap((provider) =>
   provider.preferredModels.map((modelRef) => ({
@@ -201,6 +359,46 @@ function buildLegacyModelAliases() {
 }
 
 export const LEGACY_MODEL_ALIASES = buildLegacyModelAliases();
+
+function providerRequiresApiKey(provider) {
+  return provider.setupMode === "onboard-api-key" || provider.setupMode === "env-api-key";
+}
+
+function humanizeProviderId(providerId) {
+  return providerId
+    .split("-")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+function createDynamicProvider(providerId) {
+  return {
+    id: providerId,
+    setupMode: "preconfigured",
+    label: humanizeProviderId(providerId),
+    hint: "脚本会展示该目录；如主机上已提前完成该 provider 的登录或配置，可直接使用。",
+    preferredModels: [],
+  };
+}
+
+function getProviderMetadata(providerId) {
+  return PROVIDER_CATALOG[providerId] || createDynamicProvider(providerId);
+}
+
+function sortProviders(providers) {
+  const order = new Map(PROVIDER_ORDER.map((providerId, index) => [providerId, index]));
+
+  return [...providers].sort((left, right) => {
+    const leftOrder = order.has(left.id) ? order.get(left.id) : Number.POSITIVE_INFINITY;
+    const rightOrder = order.has(right.id) ? order.get(right.id) : Number.POSITIVE_INFINITY;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return left.label.localeCompare(right.label, "en");
+  });
+}
 
 /**
  * 统一补齐常见安装路径，避免安装脚本刚写入 PATH 时当前进程还感知不到。
@@ -372,7 +570,7 @@ export function resolveModelRef(input) {
 }
 
 /**
- * 解析 OpenClaw 返回的一行模型引用，并过滤掉当前一键脚本无法自动配置鉴权的提供商。
+ * 解析 OpenClaw 返回的一行模型引用；即使 provider 需要预配置，也要把模型展示在选择列表中。
  */
 function parseModelLine(line) {
   const ref = String(line || "").trim();
@@ -382,11 +580,7 @@ function parseModelLine(line) {
   }
 
   const providerId = ref.split("/")[0].toLowerCase();
-  const provider = PROVIDER_CATALOG[providerId];
-
-  if (!provider) {
-    return null;
-  }
+  const provider = getProviderMetadata(providerId);
 
   return {
     ref,
@@ -459,8 +653,10 @@ export async function loadModelCatalog() {
     };
   }
 
-  const providers = Object.values(PROVIDER_CATALOG)
-    .map((provider) => {
+  const providerIds = Array.from(new Set(dynamicModels.map((model) => model.providerId)));
+  const providers = sortProviders(
+    providerIds.map((providerId) => {
+      const provider = getProviderMetadata(providerId);
       const models = sortModelsForProvider(
         provider,
         dynamicModels.filter((model) => model.providerId === provider.id),
@@ -471,8 +667,8 @@ export async function loadModelCatalog() {
         count: models.length,
         models,
       };
-    })
-    .filter((provider) => provider.count > 0);
+    }).filter((provider) => provider.count > 0),
+  );
 
   return {
     source: "openclaw",
@@ -515,11 +711,15 @@ function buildInstallerStep() {
 export function buildDeploymentPlan(envState, payload) {
   const modelRef = resolveModelRef(payload.modelRef || payload.modelId);
   const providerId = modelRef.split("/")[0]?.toLowerCase();
-  const provider = PROVIDER_CATALOG[providerId];
+  const provider = getProviderMetadata(providerId);
   const bot = BOT_CATALOG[payload.botId];
 
   if (!modelRef || !provider || !bot) {
     throw new Error("无效的模型或聊天机器人选择。");
+  }
+
+  if (providerRequiresApiKey(provider) && !String(payload.apiKey || "").trim()) {
+    throw new Error(`${provider.keyLabel || "API Key"} 不能为空。`);
   }
 
   for (const field of bot.credentialFields || []) {
@@ -540,6 +740,15 @@ export function buildDeploymentPlan(envState, payload) {
     command: "openclaw",
     args: buildOnboardArgs(provider, payload.apiKey),
   });
+
+  if (provider.setupMode === "env-api-key" && provider.envVar) {
+    steps.push({
+      id: `configure-${provider.id}-env`,
+      title: `写入 ${provider.keyLabel}`,
+      command: "openclaw",
+      args: ["config", "set", `env.${provider.envVar}`, JSON.stringify(payload.apiKey), "--strict-json"],
+    });
+  }
 
   steps.push({
     id: "set-model",
@@ -666,7 +875,7 @@ export function buildDeploymentPlan(envState, payload) {
     },
     bot,
     steps,
-    postDeployNotes: buildPostDeployNotes(payload.botId),
+    postDeployNotes: buildPostDeployNotes(provider, payload.botId),
   };
 }
 
@@ -689,6 +898,11 @@ function buildOnboardArgs(provider, apiKey) {
     "--accept-risk",
   ];
 
+  if (provider.setupMode === "env-api-key" || provider.setupMode === "preconfigured") {
+    args.push("--auth-choice", "skip");
+    return args;
+  }
+
   if (provider.authChoice) {
     args.push("--auth-choice", provider.authChoice);
   }
@@ -709,10 +923,11 @@ function buildOnboardArgs(provider, apiKey) {
 /**
  * 为不同渠道生成部署后的下一步说明，减少用户自己查文档的成本。
  */
-function buildPostDeployNotes(botId) {
+function buildPostDeployNotes(provider, botId) {
   const openclawCommand = getUserFacingOpenClawCommand();
   const pathHint = getUserFacingPathRefreshHint();
-  const backgroundNotes = buildBackgroundServiceNotes(openclawCommand);
+  const providerNotes = buildProviderSetupNotes(provider, openclawCommand);
+  const backgroundNotes = [...buildBackgroundServiceNotes(openclawCommand), ...providerNotes];
 
   if (botId === "telegram") {
     return [
@@ -769,6 +984,55 @@ function buildBackgroundServiceNotes(openclawCommand) {
   }
 
   return notes;
+}
+
+/**
+ * 全量模型目录里有一部分 provider 依赖主机已有登录态或云凭证，这里在部署结果里提前说明。
+ */
+function buildProviderSetupNotes(provider, openclawCommand) {
+  if (provider.setupMode === "env-api-key" && provider.envVar) {
+    return [`已为 ${provider.label} 写入 ${provider.envVar}，后续重启服务后会自动生效。`];
+  }
+
+  if (provider.id === "amazon-bedrock") {
+    return ["Amazon Bedrock 依赖主机上的 AWS 凭证链与 AWS_REGION；若未预配，后续校验会失败。"];
+  }
+
+  if (provider.id === "google-vertex") {
+    return ["Google Vertex 依赖主机上的 gcloud ADC 或服务账号；若未预配，后续校验会失败。"];
+  }
+
+  if (provider.id === "github-copilot") {
+    return [`GitHub Copilot 首次使用前请先在主机上执行：${openclawCommand} models auth login-github-copilot`];
+  }
+
+  if (provider.id === "openai-codex") {
+    return [`OpenAI Codex 首次使用前请先在主机上执行：${openclawCommand} models auth login --provider openai-codex`];
+  }
+
+  if (provider.id === "google-antigravity") {
+    return [
+      `Google Antigravity 首次使用前请先执行：${openclawCommand} plugins enable google-antigravity-auth`,
+      `然后执行：${openclawCommand} models auth login --provider google-antigravity --set-default`,
+    ];
+  }
+
+  if (provider.id === "google-gemini-cli") {
+    return [
+      `Google Gemini CLI 首次使用前请先执行：${openclawCommand} plugins enable google`,
+      `然后执行：${openclawCommand} models auth login --provider google-gemini-cli --set-default`,
+    ];
+  }
+
+  if (provider.id === "azure-openai-responses") {
+    return ["Azure OpenAI Responses 需要主机上已完成 Azure endpoint 与认证配置；脚本当前只负责把模型加入选择与设为默认。"];
+  }
+
+  if (provider.setupMode === "preconfigured") {
+    return [`${provider.label} 需要主机上已有该 provider 的登录态或环境凭证；脚本当前不会额外弹出该 provider 的高级认证流程。`];
+  }
+
+  return [];
 }
 
 /**

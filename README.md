@@ -131,7 +131,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 ## 模型选择说明
 
 - 交互模式下，脚本会先调用 `openclaw models list --all --plain` 拉取当前版本支持的最新模型目录。
-- 为了保持“只输入一个 API Key”这一目标，终端里会展示当前脚本可一键接入的提供商及其全部模型。
+- 终端里会按 provider 分组展示 `openclaw models list --all --plain` 的全部模型，不再只限静态白名单。
+- 能用一把 API Key 自动完成鉴权的 provider，会继续走极简一键部署。
+- 依赖主机已有登录态、云凭证或高级 endpoint 配置的 provider，也会显示在列表中，但脚本会提示你先完成对应的预配置。
 - `--model` 参数建议直接传完整模型引用，例如：
   - `openai/gpt-5.4`
   - `anthropic/claude-sonnet-4-5`
@@ -196,6 +198,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。
 - Linux 服务器若要求“退出 SSH 后仍继续运行”，仍需按 systemd user service 的要求启用 `loginctl enable-linger`。
+- 现在会展示 OpenClaw 全量模型目录；其中一部分 provider 只能在主机上先完成 OAuth、云凭证或 endpoint 配置后再使用。
 - 远程安装入口默认从 GitHub Raw 下载当前脚本，再从 GitHub 仓库归档下载完整代码。
 - 如需切换仓库、分支或安装目录，可覆盖下面这些环境变量：
   - `CLAW_DEPLOY_REPOSITORY`
