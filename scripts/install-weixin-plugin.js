@@ -550,10 +550,70 @@ async function runStreamingCommand(command, args, env, options = {}) {
   });
 }
 
+function extractArchiveFileNameFromNpmPackOutput(rawOutput) {
+  const normalizedOutput = String(rawOutput || "").trim();
+
+  if (!normalizedOutput) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(normalizedOutput);
+    const packEntries = Array.isArray(parsed) ? parsed : [parsed];
+
+    for (const entry of packEntries) {
+      const fileName = typeof entry?.filename === "string" ? entry.filename.trim() : "";
+
+      if (fileName && WEIXIN_PLUGIN_ARCHIVE_RE.test(fileName)) {
+        return path.basename(fileName);
+      }
+    }
+  } catch {
+    // npm 旧输出可能混有 notice 文本，这里继续走文本解析。
+  }
+
+  const candidates = normalizedOutput
+    .split(/\r?\n/gu)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of candidates.reverse()) {
+    const matchedFileName = line.match(/(?:^|filename:\s*)([^\\/:\s][^\\/\r\n]*\.(?:tgz|tar\.gz|zip))$/iu);
+
+    if (matchedFileName) {
+      return path.basename(matchedFileName[1].trim());
+    }
+
+    if (WEIXIN_PLUGIN_ARCHIVE_RE.test(line)) {
+      return path.basename(line);
+    }
+  }
+
+  return "";
+}
+
+async function findPackedArchiveInTempRoot(tempRoot, preferredFileName) {
+  if (preferredFileName) {
+    const preferredArchivePath = path.join(tempRoot, preferredFileName);
+
+    if (await pathExists(preferredArchivePath)) {
+      return preferredArchivePath;
+    }
+  }
+
+  const entries = await fs.readdir(tempRoot, { withFileTypes: true });
+  const archiveNames = entries
+    .filter((entry) => entry.isFile() && WEIXIN_PLUGIN_ARCHIVE_RE.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => right.localeCompare(left));
+
+  return archiveNames.length > 0 ? path.join(tempRoot, archiveNames[0]) : "";
+}
+
 async function installPluginFromArchive(spec, env) {
   const bareSpec = stripNpmPrefix(spec);
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claw-deploy-weixin-pack-"));
-  const packResult = await runCommand("npm", ["pack", bareSpec], {
+  const packResult = await runCommand("npm", ["pack", "--json", bareSpec], {
     env,
     cwd: tempRoot,
     allowFailure: true,
@@ -563,17 +623,13 @@ async function installPluginFromArchive(spec, env) {
     throw new Error(`npm pack ${bareSpec} 失败：${(`${packResult.stdout}\n${packResult.stderr}`).trim() || "无输出"}`);
   }
 
-  const archiveFileName = `${packResult.stdout}\n${packResult.stderr}`
-    .split(/\r?\n/gu)
-    .map((line) => line.trim())
-    .filter((line) => WEIXIN_PLUGIN_ARCHIVE_RE.test(line))
-    .pop();
+  const archiveFileName = extractArchiveFileNameFromNpmPackOutput(`${packResult.stdout}\n${packResult.stderr}`);
+  const archivePath = await findPackedArchiveInTempRoot(tempRoot, archiveFileName);
 
-  if (!archiveFileName) {
+  if (!archivePath) {
     throw new Error(`npm pack ${bareSpec} 未返回归档文件名。`);
   }
 
-  const archivePath = path.join(tempRoot, archiveFileName);
   log(`已转为本地归档安装: ${archivePath}`);
   await runStreamingCommand("openclaw", ["plugins", "install", archivePath], env);
 }
