@@ -11,6 +11,7 @@ import {
   loadModelCatalog,
   resolveModelRef,
   sanitizeLog,
+  shouldUseShellForCommand,
 } from "../core.js";
 
 const bots = Object.values(BOT_CATALOG);
@@ -333,6 +334,7 @@ async function runPlan(plan, secrets) {
     await new Promise((resolve, reject) => {
       const child = spawn(step.command, step.args, {
         env,
+        shell: step.shell ?? shouldUseShellForCommand(step.command),
         stdio: ["ignore", "pipe", "pipe"],
       });
 

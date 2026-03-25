@@ -470,6 +470,19 @@ function getWindowsPowerShellCommand() {
 }
 
 /**
+ * Windows 上很多 CLI 实际落地为 .cmd；对这类命令需要经由 shell 启动，
+ * 否则 Node 直接 spawn 会报 ENOENT。
+ */
+export function shouldUseShellForCommand(command) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const extension = path.extname(String(command || "")).toLowerCase();
+  return ![".exe", ".com"].includes(extension);
+}
+
+/**
  * 统一补齐常见安装路径，避免安装脚本刚写入 PATH 时当前进程还感知不到。
  */
 export async function buildShellEnv(extraEnv = {}) {
@@ -523,14 +536,14 @@ function execCommand(command, args, options = {}) {
     cwd = __dirname,
     env = process.env,
     allowFailure = false,
-    shell = false,
+    shell,
   } = options;
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       env,
-      shell,
+      shell: shell ?? shouldUseShellForCommand(command),
       stdio: ["ignore", "pipe", "pipe"],
     });
 
