@@ -1060,6 +1060,7 @@ function buildPostDeployNotes(provider, botId) {
       ...backgroundNotes,
       "脚本会按官方兼容矩阵选择微信插件版本线，直接执行 openclaw plugins install，避免官方安装器在宿主链接未补好时抢先发起首次登录。",
       "安装完成后，脚本会额外校验插件能否解析宿主 openclaw/plugin-sdk；若插件目录缺少宿主包链接，会自动补修。",
+      "为避免安装阶段的自动发现误加载，脚本会主动写入 plugins.allow 显式信任列表，并把 openclaw-weixin 加入可信插件名单。",
       "随后脚本会重启 Gateway，再展示微信二维码；请在执行过程中直接用微信扫一扫完成绑定。",
       `如需稍后手动重试扫码，可执行：${openclawCommand} channels login --channel openclaw-weixin`,
       "如果需要完整重装微信插件，可重新执行：npx -y @tencent-weixin/openclaw-weixin-cli install",

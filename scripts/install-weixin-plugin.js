@@ -67,6 +67,92 @@ function getWeixinPluginRoot() {
   return path.join(extensionsDir, WEIXIN_PLUGIN_ID);
 }
 
+function getExtensionsRoot() {
+  return process.env.OPENCLAW_EXTENSIONS_DIR || path.join(getOpenClawHome(), "extensions");
+}
+
+function getOpenClawConfigPath() {
+  return path.join(getOpenClawHome(), "openclaw.json");
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
+}
+
+async function readOpenClawConfig() {
+  const configPath = getOpenClawConfigPath();
+
+  if (!(await pathExists(configPath))) {
+    return {};
+  }
+
+  const content = await fs.readFile(configPath, "utf8");
+  return JSON.parse(content);
+}
+
+async function writeOpenClawConfig(config) {
+  const configPath = getOpenClawConfigPath();
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+async function listDiscoveredPluginIds() {
+  const extensionsRoot = getExtensionsRoot();
+
+  if (!(await pathExists(extensionsRoot))) {
+    return [];
+  }
+
+  const entries = await fs.readdir(extensionsRoot, { withFileTypes: true });
+  return uniqueStrings(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name));
+}
+
+function readConfiguredAllowlist(config) {
+  const allow = config?.plugins?.allow;
+  return Array.isArray(allow) ? uniqueStrings(allow) : [];
+}
+
+async function setPluginsAllow(allowlist) {
+  const config = await readOpenClawConfig();
+  const nextConfig = { ...config };
+  const nextPlugins = { ...(nextConfig.plugins || {}) };
+
+  nextPlugins.allow = uniqueStrings(allowlist);
+  nextConfig.plugins = nextPlugins;
+
+  await writeOpenClawConfig(nextConfig);
+}
+
+async function preparePluginAllowlist() {
+  const originalConfig = await readOpenClawConfig();
+  const originalAllow = readConfiguredAllowlist(originalConfig);
+  const discoveredPluginIds = await listDiscoveredPluginIds();
+  const baselineAllow = uniqueStrings(originalAllow.length ? originalAllow : discoveredPluginIds);
+  const tempAllow = uniqueStrings(baselineAllow.filter((id) => id !== WEIXIN_PLUGIN_ID));
+
+  if (!tempAllow.length) {
+    tempAllow.push("__claw_deploy_placeholder__");
+  }
+
+  await setPluginsAllow(tempAllow);
+  log(`已临时写入 plugins.allow，避免安装阶段抢先自动加载微信插件: ${tempAllow.join(", ")}`);
+
+  return {
+    originalHadExplicitAllow: originalAllow.length > 0,
+    originalAllow,
+    discoveredPluginIds,
+  };
+}
+
+async function finalizePluginAllowlist(state) {
+  const currentDiscoveredPluginIds = await listDiscoveredPluginIds();
+  const baselineAllow = state.originalHadExplicitAllow ? state.originalAllow : uniqueStrings([...state.discoveredPluginIds, ...currentDiscoveredPluginIds]);
+  const finalAllow = uniqueStrings([...baselineAllow, WEIXIN_PLUGIN_ID]);
+
+  await setPluginsAllow(finalAllow);
+  log(`已写入 plugins.allow 显式信任列表: ${finalAllow.join(", ")}`);
+}
+
 function extractPackageRootFromPath(targetPath) {
   const normalized = path.normalize(targetPath);
   const marker = `${path.sep}node_modules${path.sep}${OPENCLAW_PACKAGE_NAME}`;
@@ -417,10 +503,12 @@ async function repairWeixinPlugin(env) {
 
 async function main() {
   const env = await buildShellEnv();
+  const allowlistState = await preparePluginAllowlist();
   await installWeixinPlugin(env);
 
   const repairResult = await repairWeixinPlugin(env);
   log(`微信插件依赖校验通过: ${repairResult.validation.modulePath}`);
+  await finalizePluginAllowlist(allowlistState);
   await restartGateway(env);
   log("开始微信扫码登录...");
   await runStreamingCommand("openclaw", ["channels", "login", "--channel", WEIXIN_PLUGIN_ID], env);
