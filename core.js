@@ -431,11 +431,52 @@ function sortProviders(providers) {
 }
 
 /**
+ * Windows 环境变量名通常保留为 Path；这里保留原始大小写并清理重复键，
+ * 避免子进程拿到空 PATH 后连 powershell.exe 都找不到。
+ */
+function resolvePathEnvKey(env) {
+  if (process.platform !== "win32") {
+    return "PATH";
+  }
+
+  return Object.keys(env).find((key) => key.toLowerCase() === "path") || "Path";
+}
+
+function setPathEnvValue(env, value) {
+  const pathKey = resolvePathEnvKey(env);
+
+  if (process.platform === "win32") {
+    for (const key of Object.keys(env)) {
+      if (key !== pathKey && key.toLowerCase() === "path") {
+        delete env[key];
+      }
+    }
+  }
+
+  env[pathKey] = value;
+}
+
+function getWindowsPowerShellCommand() {
+  if (process.platform !== "win32") {
+    return "powershell";
+  }
+
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR;
+  if (!systemRoot) {
+    return "powershell.exe";
+  }
+
+  return path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+}
+
+/**
  * 统一补齐常见安装路径，避免安装脚本刚写入 PATH 时当前进程还感知不到。
  */
 export async function buildShellEnv(extraEnv = {}) {
   const env = { ...process.env, ...extraEnv };
-  const pathEntries = new Set((env.PATH || "").split(path.delimiter).filter(Boolean));
+  const pathKey = resolvePathEnvKey(env);
+  const currentPath = env[pathKey] || env.PATH || env.Path || "";
+  const pathEntries = new Set(currentPath.split(path.delimiter).filter(Boolean));
 
   if (process.platform === "darwin") {
     pathEntries.add("/opt/homebrew/bin");
@@ -443,6 +484,11 @@ export async function buildShellEnv(extraEnv = {}) {
   }
 
   if (process.platform === "win32") {
+    const systemRoot = env.SystemRoot || env.WINDIR;
+    if (systemRoot) {
+      pathEntries.add(path.join(systemRoot, "System32"));
+      pathEntries.add(path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0"));
+    }
     if (env.APPDATA) {
       pathEntries.add(path.join(env.APPDATA, "npm"));
     }
@@ -464,7 +510,7 @@ export async function buildShellEnv(extraEnv = {}) {
     // npm 可能尚未安装，这里保持静默即可，后续交给安装步骤处理。
   }
 
-  env.PATH = Array.from(pathEntries).join(path.delimiter);
+  setPathEnvValue(env, Array.from(pathEntries).join(path.delimiter));
   env.SHARP_IGNORE_GLOBAL_LIBVIPS = env.SHARP_IGNORE_GLOBAL_LIBVIPS || "1";
   return env;
 }
@@ -716,7 +762,7 @@ function buildInstallerStep() {
     return {
       id: "install-openclaw",
       title: "安装或修复 OpenClaw 运行环境",
-      command: "powershell.exe",
+      command: getWindowsPowerShellCommand(),
       args: [
         "-NoProfile",
         "-ExecutionPolicy",
