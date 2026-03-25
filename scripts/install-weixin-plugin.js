@@ -122,10 +122,6 @@ function resolveWeixinAccountIndexPath() {
   return path.join(resolveWeixinStateDir(), "accounts.json");
 }
 
-function resolveWeixinQrPreviewPath() {
-  return path.join(os.tmpdir(), "openclaw-weixin-qr-preview.html");
-}
-
 function normalizeAccountId(value) {
   const trimmed = String(value || "").trim();
 
@@ -145,15 +141,6 @@ function normalizeAccountId(value) {
     .slice(0, 64);
 
   return normalized || WEIXIN_DEFAULT_ACCOUNT_ID;
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&#39;");
 }
 
 async function ensureWeixinChannelConfig() {
@@ -275,6 +262,23 @@ async function buildWeixinHeaders(options = {}) {
   return headers;
 }
 
+function createWeixinPluginRequire(pluginRoot) {
+  return createRequire(path.join(pluginRoot, "index.ts"));
+}
+
+async function renderWeixinQrInTerminal(qrUrl, pluginRoot) {
+  const pluginRequire = createWeixinPluginRequire(pluginRoot);
+  const qrcodeTerminal = pluginRequire("qrcode-terminal");
+
+  await new Promise((resolve) => {
+    qrcodeTerminal.generate(qrUrl, (renderedQr) => {
+      process.stdout.write("\n");
+      process.stdout.write(`${renderedQr}\n`);
+      resolve();
+    });
+  });
+}
+
 async function fetchWeixinQrCode(options = {}) {
   const headers = await buildWeixinHeaders({ accountId: options.accountId });
   const url = new URL(`ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(options.botType || WEIXIN_DEFAULT_BOT_TYPE)}`, `${options.apiBaseUrl || WEIXIN_DEFAULT_BASE_URL}/`);
@@ -320,98 +324,6 @@ async function pollWeixinQrStatus(qrcode, options = {}) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function writeWeixinQrPreview(qrUrl) {
-  const previewPath = resolveWeixinQrPreviewPath();
-  const escapedQrUrl = escapeHtml(qrUrl);
-  const content = `<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="2">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenClaw 微信扫码登录</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
-      background: #f6f8fb;
-      color: #1f2937;
-    }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      box-sizing: border-box;
-      background:
-        radial-gradient(circle at top, #d8f5de 0, rgba(216, 245, 222, 0.75) 24%, transparent 55%),
-        linear-gradient(180deg, #f6f8fb 0%, #eef3f9 100%);
-    }
-    main {
-      width: min(100%, 560px);
-      background: rgba(255, 255, 255, 0.92);
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      border-radius: 24px;
-      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
-      padding: 28px;
-      box-sizing: border-box;
-    }
-    h1 {
-      margin: 0 0 10px;
-      font-size: 28px;
-    }
-    p {
-      margin: 0 0 14px;
-      line-height: 1.6;
-    }
-    .qr-box {
-      display: flex;
-      justify-content: center;
-      margin: 24px 0;
-      padding: 24px;
-      border-radius: 20px;
-      background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-      border: 1px solid rgba(15, 23, 42, 0.08);
-    }
-    img {
-      width: min(100%, 360px);
-      height: auto;
-      display: block;
-      border-radius: 16px;
-      background: #fff;
-    }
-    a {
-      color: #0f766e;
-      word-break: break-all;
-    }
-    small {
-      display: block;
-      margin-top: 18px;
-      color: #475569;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>微信扫码登录</h1>
-    <p>如果终端里的二维码显示乱码，请直接在这个页面里扫码。二维码刷新后，这个页面会自动更新。</p>
-    <div class="qr-box">
-      <img src="${escapedQrUrl}" alt="微信二维码">
-    </div>
-    <p>如果图片没有显示，可以直接打开这个链接：</p>
-    <p><a href="${escapedQrUrl}">${escapedQrUrl}</a></p>
-    <small>页面每 2 秒自动刷新一次；若浏览器没有自动更新，请手动刷新本页。</small>
-  </main>
-</body>
-</html>
-`;
-
-  await fs.writeFile(previewPath, content, "utf8");
-  return previewPath;
 }
 
 async function listDiscoveredPluginIds() {
@@ -665,36 +577,9 @@ async function restartGateway(env) {
   await runStreamingCommand("openclaw", ["gateway", "restart"], env);
 }
 
-async function openWeixinQrPreview(previewPath, env) {
-  if (process.platform !== "win32") {
-    return false;
-  }
-
-  const systemRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
-  const openResult = await runCommand(
-    path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
-    [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      "Start-Process -FilePath $env:CLAW_DEPLOY_WEIXIN_QR_PREVIEW",
-    ],
-    {
-      env: {
-        ...env,
-        CLAW_DEPLOY_WEIXIN_QR_PREVIEW: previewPath,
-      },
-      allowFailure: true,
-    },
-  );
-
-  return openResult.code === 0;
-}
-
-// Windows PowerShell 经典终端对 qrcode-terminal 的块字符支持较差，这里改成浏览器预览页。
-async function runWindowsWeixinLogin(env) {
-  log("检测到 Windows 原生终端，已切换为浏览器二维码预览模式。");
+// Windows PowerShell 经典终端对 small 模式的半块字符兼容较差，这里改成 ANSI 彩色终端二维码。
+async function runWindowsWeixinLogin(env, pluginRoot) {
+  log("检测到 Windows 原生终端，已切换为终端兼容二维码模式。");
   await ensureWeixinChannelConfig();
 
   let qrState = await fetchWeixinQrCode({
@@ -706,17 +591,8 @@ async function runWindowsWeixinLogin(env) {
     throw new Error("未能获取微信二维码链接，请稍后重试。");
   }
 
-  const previewPath = await writeWeixinQrPreview(qrState.qrcode_img_content);
-  log(`二维码预览页已写入: ${previewPath}`);
-
-  if (await openWeixinQrPreview(previewPath, env)) {
-    log("已尝试在默认浏览器打开二维码预览页。");
-  } else {
-    log("未能自动打开浏览器，请手动打开上面的二维码预览页。");
-  }
-
-  log(`二维码直链: ${qrState.qrcode_img_content}`);
-  log("请使用微信扫一扫完成绑定，脚本会继续等待登录结果。");
+  log("请直接在当前终端中扫码，脚本会继续等待登录结果。");
+  await renderWeixinQrInTerminal(qrState.qrcode_img_content, pluginRoot);
 
   const deadline = Date.now() + WEIXIN_QR_LOGIN_TIMEOUT_MS;
   let refreshCount = 1;
@@ -752,9 +628,8 @@ async function runWindowsWeixinLogin(env) {
           throw new Error("二维码刷新失败：未拿到新的二维码链接。");
         }
 
-        await writeWeixinQrPreview(qrState.qrcode_img_content);
-        log("二维码已刷新，浏览器预览页会自动更新；如果页面未刷新，请手动刷新浏览器。");
-        log(`二维码直链: ${qrState.qrcode_img_content}`);
+        log("二维码已刷新，请重新扫码。");
+        await renderWeixinQrInTerminal(qrState.qrcode_img_content, pluginRoot);
         scannedPrinted = false;
         break;
       }
@@ -1015,7 +890,7 @@ async function main() {
   log("开始微信扫码登录...");
 
   if (process.platform === "win32") {
-    await runWindowsWeixinLogin(env);
+    await runWindowsWeixinLogin(env, repairResult.pluginRoot);
     return;
   }
 
