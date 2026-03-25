@@ -482,7 +482,7 @@ async function main() {
     let apiKey = args.apiKey;
 
     if ((selection.provider.setupMode === "onboard-api-key" || selection.provider.setupMode === "env-api-key") && !apiKey) {
-      apiKey = await promptSecret(`请输入 ${model.keyLabel}: `, terminal);
+      apiKey = await promptLine(`请输入 ${model.keyLabel}（将直接显示，便于核对）: `, terminal);
     }
 
     const botCredentials = await collectBotCredentials(args, bot, terminal);
