@@ -4,7 +4,11 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { buildShellEnv, buildSpawnInvocation } from "../core.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const OPENCLAW_PACKAGE_NAME = "openclaw";
 const WEIXIN_PLUGIN_ID = "openclaw-weixin";
