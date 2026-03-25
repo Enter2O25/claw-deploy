@@ -184,11 +184,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 ## 当前极简模式支持
 
 - `微信机器人`
-  - 不需要额外输入文本凭证；脚本会调用官方微信安装器，并在安装后额外校验 / 修复插件到宿主 `openclaw` 的依赖链接
-  - 安装器会自动检测本机 `openclaw --version`，并按兼容矩阵选择合适的微信插件版本线
+  - 不需要额外输入文本凭证；脚本会按官方兼容矩阵选择兼容版本线，并直接执行 `openclaw plugins install`
+  - 这样可以避免官方安装器在宿主 `openclaw` 软链接还没补好时，就提前触发首次扫码登录
   - 会在部署过程中展示二维码，直接使用微信扫码即可完成接入
-  - 若官方安装器遗漏了插件目录里的宿主 `openclaw` 软链接，脚本会自动补修并重试 `openclaw channels login --channel openclaw-weixin`
-  - 安装器内部会自动重启 OpenClaw Gateway；脚本最后仍会做一次状态检查
+  - 若插件目录遗漏了宿主 `openclaw` 软链接，脚本会自动补修，再执行 `openclaw gateway restart` 和 `openclaw channels login --channel openclaw-weixin`
+  - 最后仍会做一次状态检查
 - `飞书机器人`
   - 自动写入 `channels.feishu.enabled`、`defaultAccount=main`、`accounts.main.appId/appSecret`、`dmPolicy=pairing`
   - 会显式安装并启动后台 Gateway 服务
@@ -250,7 +250,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
 - 飞书按 OpenClaw 官方接入方式，需要额外提供 App ID 和 App Secret；脚本会把这两步收敛成两个字段。
 - 飞书平台侧的机器人能力开通、事件订阅与应用发布仍需用户自己在开放平台完成；脚本只负责 OpenClaw 本地侧配置。
-- 微信按腾讯微信团队提供的安装器方式接入，但脚本会在外层补一层宿主兼容修复，解决插件目录缺少 `openclaw` 包链接时的加载失败。
+- 微信版本线按腾讯微信团队提供的兼容矩阵选择，但脚本会直接执行 `openclaw plugins install`，随后补宿主兼容修复并重启 Gateway，避免首次扫码阶段先报一次加载失败。
 - 根据当前 npm README，微信安装器会自动根据 OpenClaw 版本选择兼容插件线：`latest` 适配 `>=2026.3.22`，`legacy` 适配 `>=2026.3.0 <2026.3.22`。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。
 - Linux 服务器若要求“退出 SSH 后仍继续运行”，仍需按 systemd user service 的要求启用 `loginctl enable-linger`。

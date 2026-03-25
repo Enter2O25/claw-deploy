@@ -9,7 +9,10 @@ import { buildShellEnv } from "../core.js";
 const OPENCLAW_PACKAGE_NAME = "openclaw";
 const WEIXIN_PLUGIN_ID = "openclaw-weixin";
 const REQUIRED_OPENCLAW_MODULE = "openclaw/plugin-sdk/channel-config-schema";
+const WEIXIN_PLUGIN_PACKAGE = "@tencent-weixin/openclaw-weixin";
 const WEIXIN_INSTALLER_SPEC = process.env.CLAW_DEPLOY_WEIXIN_INSTALLER || "@tencent-weixin/openclaw-weixin-cli@latest";
+const OPENCLAW_MIN_VERSION = { major: 2026, minor: 3, patch: 0 };
+const OPENCLAW_NEW_HOST_MIN_VERSION = { major: 2026, minor: 3, patch: 22 };
 
 function log(message) {
   console.log(`[openclaw-weixin] ${message}`);
@@ -17,6 +20,33 @@ function log(message) {
 
 function normalizePathForCompare(targetPath) {
   return path.resolve(targetPath).replace(/[\\/]+$/u, "");
+}
+
+function parseSemver(rawVersion) {
+  const match = String(rawVersion || "").match(/(\d+)\.(\d+)\.(\d+)/u);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    raw: `${match[1]}.${match[2]}.${match[3]}`,
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+  };
+}
+
+function compareSemver(left, right) {
+  if (left.major !== right.major) {
+    return left.major - right.major;
+  }
+
+  if (left.minor !== right.minor) {
+    return left.minor - right.minor;
+  }
+
+  return left.patch - right.patch;
 }
 
 async function pathExists(targetPath) {
@@ -130,6 +160,56 @@ async function runStreamingCommand(command, args, env) {
       resolve();
     });
   });
+}
+
+async function detectOpenClawVersion(env) {
+  const versionResult = await runCommand("openclaw", ["--version"], { env, allowFailure: true });
+  const version = parseSemver(`${versionResult.stdout}\n${versionResult.stderr}`);
+
+  if (versionResult.code !== 0 || !version) {
+    throw new Error(`无法检测 openclaw 版本：${(`${versionResult.stdout}\n${versionResult.stderr}`).trim() || "无输出"}`);
+  }
+
+  return version;
+}
+
+async function installWeixinPlugin(env) {
+  const explicitPluginSpec = String(process.env.CLAW_DEPLOY_WEIXIN_PLUGIN_SPEC || "").trim();
+
+  if (explicitPluginSpec) {
+    log(`使用显式指定的微信插件版本: ${explicitPluginSpec}`);
+    log(`正在安装插件 ${explicitPluginSpec}...`);
+    await runStreamingCommand("openclaw", ["plugins", "install", explicitPluginSpec], env);
+    return { pluginSpec: explicitPluginSpec, mode: "override" };
+  }
+
+  const openclawVersion = await detectOpenClawVersion(env);
+  log(`检测到 OpenClaw 版本: ${openclawVersion.raw}`);
+
+  if (compareSemver(openclawVersion, OPENCLAW_NEW_HOST_MIN_VERSION) >= 0) {
+    const pluginSpec = `${WEIXIN_PLUGIN_PACKAGE}@latest`;
+    log("匹配兼容版本: 2.0.x (新宿主线) (dist-tag: latest)");
+    log(`正在安装插件 ${pluginSpec}...`);
+    await runStreamingCommand("openclaw", ["plugins", "install", pluginSpec], env);
+    return { pluginSpec, mode: "matrix", distTag: "latest", openclawVersion: openclawVersion.raw };
+  }
+
+  if (compareSemver(openclawVersion, OPENCLAW_MIN_VERSION) >= 0) {
+    const pluginSpec = `${WEIXIN_PLUGIN_PACKAGE}@legacy`;
+    log("匹配兼容版本: 1.0.x (旧宿主线) (dist-tag: legacy)");
+    log(`正在安装插件 ${pluginSpec}...`);
+    await runStreamingCommand("openclaw", ["plugins", "install", pluginSpec], env);
+    return { pluginSpec, mode: "matrix", distTag: "legacy", openclawVersion: openclawVersion.raw };
+  }
+
+  throw new Error(
+    `当前 OpenClaw 版本 ${openclawVersion.raw} 不在微信插件支持范围内；需升级到 >=2026.3.0，或手动执行 ${WEIXIN_INSTALLER_SPEC} 进一步排查。`,
+  );
+}
+
+async function restartGateway(env) {
+  log("正在重启 OpenClaw Gateway...");
+  await runStreamingCommand("openclaw", ["gateway", "restart"], env);
 }
 
 async function resolvePackageRootFromExecutablePath(executablePath, visited = new Set()) {
@@ -337,24 +417,13 @@ async function repairWeixinPlugin(env) {
 
 async function main() {
   const env = await buildShellEnv();
-  let installerFailed = false;
-
-  log("正在调用官方微信安装器...");
-
-  try {
-    await runStreamingCommand("npx", ["-y", WEIXIN_INSTALLER_SPEC, "install"], env);
-  } catch (error) {
-    installerFailed = true;
-    log(`官方安装器返回异常，准备执行宿主兼容修复并视情况重试连接：${error.message}`);
-  }
+  await installWeixinPlugin(env);
 
   const repairResult = await repairWeixinPlugin(env);
   log(`微信插件依赖校验通过: ${repairResult.validation.modulePath}`);
-
-  if (installerFailed || repairResult.repaired) {
-    log("开始重试微信首次连接...");
-    await runStreamingCommand("openclaw", ["channels", "login", "--channel", WEIXIN_PLUGIN_ID], env);
-  }
+  await restartGateway(env);
+  log("开始微信扫码登录...");
+  await runStreamingCommand("openclaw", ["channels", "login", "--channel", WEIXIN_PLUGIN_ID], env);
 }
 
 main().catch((error) => {
