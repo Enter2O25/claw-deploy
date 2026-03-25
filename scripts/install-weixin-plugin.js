@@ -4,7 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
-import { buildShellEnv, shouldUseShellForCommand } from "../core.js";
+import { buildShellEnv, buildSpawnInvocation } from "../core.js";
 
 const OPENCLAW_PACKAGE_NAME = "openclaw";
 const WEIXIN_PLUGIN_ID = "openclaw-weixin";
@@ -211,15 +211,14 @@ async function isValidOpenClawPackageRoot(packageRoot) {
 
 async function runCommand(command, args, options = {}) {
   const {
-    env = process.env,
     allowFailure = false,
-    shell,
+    ...spawnOptions
   } = options;
+  const invocation = buildSpawnInvocation(command, args, spawnOptions);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      env,
-      shell: shell ?? shouldUseShellForCommand(command),
+    const child = spawn(invocation.command, invocation.args, {
+      ...invocation.options,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -259,10 +258,11 @@ async function runCommand(command, args, options = {}) {
 }
 
 async function runStreamingCommand(command, args, env) {
+  const invocation = buildSpawnInvocation(command, args, { env });
+
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      env,
-      shell: shouldUseShellForCommand(command),
+    const child = spawn(invocation.command, invocation.args, {
+      ...invocation.options,
       stdio: "inherit",
     });
 

@@ -470,16 +470,74 @@ function getWindowsPowerShellCommand() {
 }
 
 /**
- * Windows 上很多 CLI 实际落地为 .cmd；对这类命令需要经由 shell 启动，
- * 否则 Node 直接 spawn 会报 ENOENT。
+ * Windows 上常见 CLI 会落地成 .cmd / .bat shim；这些入口不能直接被 spawn，
+ * 这里改为显式经由 PowerShell 解析并启动，避免 shell=true 的兼容告警。
  */
-export function shouldUseShellForCommand(command) {
+function shouldUseWindowsShimWrapper(command) {
   if (process.platform !== "win32") {
     return false;
   }
 
-  const extension = path.extname(String(command || "")).toLowerCase();
-  return ![".exe", ".com"].includes(extension);
+  const normalizedCommand = String(command || "").trim();
+  const extension = path.extname(normalizedCommand).toLowerCase();
+  const baseName = path.basename(normalizedCommand).toLowerCase();
+
+  if ([".cmd", ".bat"].includes(extension)) {
+    return true;
+  }
+
+  if ([".exe", ".com", ".ps1"].includes(extension)) {
+    return false;
+  }
+
+  return ["openclaw", "npm", "npx", "pnpm"].includes(baseName);
+}
+
+export function buildSpawnInvocation(command, args = [], options = {}) {
+  const {
+    env = process.env,
+    shell = false,
+    ...spawnOptions
+  } = options;
+
+  if (shell || !shouldUseWindowsShimWrapper(command)) {
+    return {
+      command,
+      args,
+      options: {
+        ...spawnOptions,
+        env,
+        shell,
+      },
+    };
+  }
+
+  const wrapperEnv = {
+    ...env,
+    CLAW_DEPLOY_WRAPPED_COMMAND: String(command),
+    CLAW_DEPLOY_WRAPPED_ARGS_JSON: JSON.stringify(args.map((arg) => String(arg))),
+  };
+  const wrapperScript = [
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "[Console]::InputEncoding = [System.Text.Encoding]::UTF8",
+    "$OutputEncoding = [System.Text.Encoding]::UTF8",
+    "$wrappedCommand = $env:CLAW_DEPLOY_WRAPPED_COMMAND",
+    "$wrappedArgs = @()",
+    "if ($env:CLAW_DEPLOY_WRAPPED_ARGS_JSON) { $wrappedArgs = @((ConvertFrom-Json -InputObject $env:CLAW_DEPLOY_WRAPPED_ARGS_JSON)) }",
+    "$resolvedCommand = if (Test-Path $wrappedCommand) { $wrappedCommand } else { (Get-Command $wrappedCommand -ErrorAction Stop).Source }",
+    "& $resolvedCommand @wrappedArgs",
+    "exit $LASTEXITCODE",
+  ].join("; ");
+
+  return {
+    command: getWindowsPowerShellCommand(),
+    args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", wrapperScript],
+    options: {
+      ...spawnOptions,
+      env: wrapperEnv,
+      shell: false,
+    },
+  };
 }
 
 /**
@@ -534,16 +592,17 @@ export async function buildShellEnv(extraEnv = {}) {
 function execCommand(command, args, options = {}) {
   const {
     cwd = __dirname,
-    env = process.env,
     allowFailure = false,
-    shell,
+    ...spawnOptions
   } = options;
+  const invocation = buildSpawnInvocation(command, args, {
+    cwd,
+    ...spawnOptions,
+  });
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      env,
-      shell: shell ?? shouldUseShellForCommand(command),
+    const child = spawn(invocation.command, invocation.args, {
+      ...invocation.options,
       stdio: ["ignore", "pipe", "pipe"],
     });
 

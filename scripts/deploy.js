@@ -5,13 +5,13 @@ import { openSync, closeSync } from "node:fs";
 import { ReadStream, WriteStream } from "node:tty";
 import {
   BOT_CATALOG,
+  buildSpawnInvocation,
   buildDeploymentPlan,
   buildShellEnv,
   detectEnvironment,
   loadModelCatalog,
   resolveModelRef,
   sanitizeLog,
-  shouldUseShellForCommand,
 } from "../core.js";
 
 const bots = Object.values(BOT_CATALOG);
@@ -332,9 +332,12 @@ async function runPlan(plan, secrets) {
     console.log(`\n[${index + 1}/${plan.steps.length}] ${step.title}`);
 
     await new Promise((resolve, reject) => {
-      const child = spawn(step.command, step.args, {
+      const invocation = buildSpawnInvocation(step.command, step.args, {
         env,
-        shell: step.shell ?? shouldUseShellForCommand(step.command),
+        shell: step.shell ?? false,
+      });
+      const child = spawn(invocation.command, invocation.args, {
+        ...invocation.options,
         stdio: ["ignore", "pipe", "pipe"],
       });
 
