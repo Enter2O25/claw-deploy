@@ -17,6 +17,16 @@ const WEIXIN_PLUGIN_PACKAGE = "@tencent-weixin/openclaw-weixin";
 const WEIXIN_INSTALLER_SPEC = process.env.CLAW_DEPLOY_WEIXIN_INSTALLER || "@tencent-weixin/openclaw-weixin-cli@latest";
 const OPENCLAW_MIN_VERSION = { major: 2026, minor: 3, patch: 0 };
 const OPENCLAW_NEW_HOST_MIN_VERSION = { major: 2026, minor: 3, patch: 22 };
+const WEIXIN_DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
+const WEIXIN_DEFAULT_BOT_TYPE = "3";
+const WEIXIN_QR_POLL_TIMEOUT_MS = 35_000;
+const WEIXIN_QR_LOGIN_TIMEOUT_MS = 480_000;
+const WEIXIN_QR_MAX_REFRESH_COUNT = 3;
+const WEIXIN_DEFAULT_ACCOUNT_ID = "default";
+const WEIXIN_VALID_ACCOUNT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/iu;
+const WEIXIN_INVALID_ACCOUNT_ID_CHARS_RE = /[^a-z0-9_-]+/giu;
+const WEIXIN_ACCOUNT_ID_LEADING_DASH_RE = /^-+/u;
+const WEIXIN_ACCOUNT_ID_TRAILING_DASH_RE = /-+$/u;
 
 function log(message) {
   console.log(`[openclaw-weixin] ${message}`);
@@ -98,6 +108,310 @@ async function writeOpenClawConfig(config) {
   const configPath = getOpenClawConfigPath();
   await fs.mkdir(path.dirname(configPath), { recursive: true });
   await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+function resolveWeixinStateDir() {
+  return path.join(getOpenClawHome(), WEIXIN_PLUGIN_ID);
+}
+
+function resolveWeixinAccountsDir() {
+  return path.join(resolveWeixinStateDir(), "accounts");
+}
+
+function resolveWeixinAccountIndexPath() {
+  return path.join(resolveWeixinStateDir(), "accounts.json");
+}
+
+function resolveWeixinQrPreviewPath() {
+  return path.join(os.tmpdir(), "openclaw-weixin-qr-preview.html");
+}
+
+function normalizeAccountId(value) {
+  const trimmed = String(value || "").trim();
+
+  if (!trimmed) {
+    return WEIXIN_DEFAULT_ACCOUNT_ID;
+  }
+
+  if (WEIXIN_VALID_ACCOUNT_ID_RE.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(WEIXIN_INVALID_ACCOUNT_ID_CHARS_RE, "-")
+    .replace(WEIXIN_ACCOUNT_ID_LEADING_DASH_RE, "")
+    .replace(WEIXIN_ACCOUNT_ID_TRAILING_DASH_RE, "")
+    .slice(0, 64);
+
+  return normalized || WEIXIN_DEFAULT_ACCOUNT_ID;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&#39;");
+}
+
+async function ensureWeixinChannelConfig() {
+  const config = await readOpenClawConfig();
+  const nextConfig = { ...config };
+  const nextChannels = { ...(nextConfig.channels || {}) };
+  const existingSection = nextChannels[WEIXIN_PLUGIN_ID];
+  const nextSection =
+    existingSection && typeof existingSection === "object" && !Array.isArray(existingSection)
+      ? { ...existingSection }
+      : {};
+
+  if (!nextSection.accounts || typeof nextSection.accounts !== "object" || Array.isArray(nextSection.accounts)) {
+    nextSection.accounts = {};
+  }
+
+  nextChannels[WEIXIN_PLUGIN_ID] = nextSection;
+  nextConfig.channels = nextChannels;
+
+  await writeOpenClawConfig(nextConfig);
+}
+
+async function registerWeixinAccountId(accountId) {
+  const normalizedAccountId = normalizeAccountId(accountId);
+  if (!normalizedAccountId) {
+    throw new Error("无法写入微信账号索引：accountId 为空。");
+  }
+
+  const indexPath = resolveWeixinAccountIndexPath();
+  await fs.mkdir(path.dirname(indexPath), { recursive: true });
+
+  let existing = [];
+
+  try {
+    const raw = await fs.readFile(indexPath, "utf8");
+    const parsed = JSON.parse(raw);
+    existing = Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string" && value.trim()) : [];
+  } catch {
+    existing = [];
+  }
+
+  if (!existing.includes(normalizedAccountId)) {
+    existing.push(normalizedAccountId);
+    await fs.writeFile(indexPath, `${JSON.stringify(existing, null, 2)}\n`, "utf8");
+  }
+}
+
+async function loadWeixinStoredAccount(accountId) {
+  const normalizedAccountId = normalizeAccountId(accountId);
+  if (!normalizedAccountId) {
+    return {};
+  }
+
+  const accountPath = path.join(resolveWeixinAccountsDir(), `${normalizedAccountId}.json`);
+
+  try {
+    const raw = await fs.readFile(accountPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveWeixinAccount(accountId, update) {
+  const normalizedAccountId = normalizeAccountId(accountId);
+  if (!normalizedAccountId) {
+    throw new Error("无法保存微信账号：accountId 为空。");
+  }
+
+  const accountsDir = resolveWeixinAccountsDir();
+  const accountPath = path.join(accountsDir, `${normalizedAccountId}.json`);
+  const existing = await loadWeixinStoredAccount(normalizedAccountId);
+  const token = String(update.token || existing.token || "").trim();
+  const baseUrl = String(update.baseUrl || existing.baseUrl || "").trim();
+  const userId = update.userId === undefined ? String(existing.userId || "").trim() : String(update.userId || "").trim();
+  const payload = {
+    ...(token ? { token, savedAt: new Date().toISOString() } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(userId ? { userId } : {}),
+  };
+
+  await fs.mkdir(accountsDir, { recursive: true });
+  await fs.writeFile(accountPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+function getWeixinRouteTag(config, accountId) {
+  const section = config?.channels?.[WEIXIN_PLUGIN_ID];
+  if (!section || typeof section !== "object" || Array.isArray(section)) {
+    return "";
+  }
+
+  if (accountId) {
+    const scopedTag = section.accounts?.[accountId]?.routeTag;
+    if (typeof scopedTag === "number") {
+      return String(scopedTag);
+    }
+    if (typeof scopedTag === "string" && scopedTag.trim()) {
+      return scopedTag.trim();
+    }
+  }
+
+  if (typeof section.routeTag === "number") {
+    return String(section.routeTag);
+  }
+
+  return typeof section.routeTag === "string" && section.routeTag.trim() ? section.routeTag.trim() : "";
+}
+
+async function buildWeixinHeaders(options = {}) {
+  const config = await readOpenClawConfig();
+  const routeTag = getWeixinRouteTag(config, options.accountId);
+  const headers = { ...(options.extraHeaders || {}) };
+
+  if (routeTag) {
+    headers.SKRouteTag = routeTag;
+  }
+
+  return headers;
+}
+
+async function fetchWeixinQrCode(options = {}) {
+  const headers = await buildWeixinHeaders({ accountId: options.accountId });
+  const url = new URL(`ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(options.botType || WEIXIN_DEFAULT_BOT_TYPE)}`, `${options.apiBaseUrl || WEIXIN_DEFAULT_BASE_URL}/`);
+  const response = await fetch(url.toString(), { headers });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`获取微信二维码失败：${response.status} ${response.statusText}${body ? `，响应：${body}` : ""}`);
+  }
+
+  return response.json();
+}
+
+async function pollWeixinQrStatus(qrcode, options = {}) {
+  const headers = await buildWeixinHeaders({
+    accountId: options.accountId,
+    extraHeaders: {
+      "iLink-App-ClientVersion": "1",
+    },
+  });
+  const url = new URL(`ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`, `${options.apiBaseUrl || WEIXIN_DEFAULT_BASE_URL}/`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), WEIXIN_QR_POLL_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers,
+      signal: controller.signal,
+    });
+    const rawText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`轮询微信登录状态失败：${response.status} ${response.statusText}${rawText ? `，响应：${rawText}` : ""}`);
+    }
+
+    return JSON.parse(rawText);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { status: "wait" };
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function writeWeixinQrPreview(qrUrl) {
+  const previewPath = resolveWeixinQrPreviewPath();
+  const escapedQrUrl = escapeHtml(qrUrl);
+  const content = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="2">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenClaw 微信扫码登录</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      background: #f6f8fb;
+      color: #1f2937;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background:
+        radial-gradient(circle at top, #d8f5de 0, rgba(216, 245, 222, 0.75) 24%, transparent 55%),
+        linear-gradient(180deg, #f6f8fb 0%, #eef3f9 100%);
+    }
+    main {
+      width: min(100%, 560px);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 24px;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+      padding: 28px;
+      box-sizing: border-box;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+    p {
+      margin: 0 0 14px;
+      line-height: 1.6;
+    }
+    .qr-box {
+      display: flex;
+      justify-content: center;
+      margin: 24px 0;
+      padding: 24px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+    img {
+      width: min(100%, 360px);
+      height: auto;
+      display: block;
+      border-radius: 16px;
+      background: #fff;
+    }
+    a {
+      color: #0f766e;
+      word-break: break-all;
+    }
+    small {
+      display: block;
+      margin-top: 18px;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>微信扫码登录</h1>
+    <p>如果终端里的二维码显示乱码，请直接在这个页面里扫码。二维码刷新后，这个页面会自动更新。</p>
+    <div class="qr-box">
+      <img src="${escapedQrUrl}" alt="微信二维码">
+    </div>
+    <p>如果图片没有显示，可以直接打开这个链接：</p>
+    <p><a href="${escapedQrUrl}">${escapedQrUrl}</a></p>
+    <small>页面每 2 秒自动刷新一次；若浏览器没有自动更新，请手动刷新本页。</small>
+  </main>
+</body>
+</html>
+`;
+
+  await fs.writeFile(previewPath, content, "utf8");
+  return previewPath;
 }
 
 async function listDiscoveredPluginIds() {
@@ -351,6 +665,129 @@ async function restartGateway(env) {
   await runStreamingCommand("openclaw", ["gateway", "restart"], env);
 }
 
+async function openWeixinQrPreview(previewPath, env) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+  const openResult = await runCommand(
+    path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "Start-Process -FilePath $env:CLAW_DEPLOY_WEIXIN_QR_PREVIEW",
+    ],
+    {
+      env: {
+        ...env,
+        CLAW_DEPLOY_WEIXIN_QR_PREVIEW: previewPath,
+      },
+      allowFailure: true,
+    },
+  );
+
+  return openResult.code === 0;
+}
+
+// Windows PowerShell 经典终端对 qrcode-terminal 的块字符支持较差，这里改成浏览器预览页。
+async function runWindowsWeixinLogin(env) {
+  log("检测到 Windows 原生终端，已切换为浏览器二维码预览模式。");
+  await ensureWeixinChannelConfig();
+
+  let qrState = await fetchWeixinQrCode({
+    apiBaseUrl: WEIXIN_DEFAULT_BASE_URL,
+    botType: WEIXIN_DEFAULT_BOT_TYPE,
+  });
+
+  if (!qrState?.qrcode || !qrState?.qrcode_img_content) {
+    throw new Error("未能获取微信二维码链接，请稍后重试。");
+  }
+
+  const previewPath = await writeWeixinQrPreview(qrState.qrcode_img_content);
+  log(`二维码预览页已写入: ${previewPath}`);
+
+  if (await openWeixinQrPreview(previewPath, env)) {
+    log("已尝试在默认浏览器打开二维码预览页。");
+  } else {
+    log("未能自动打开浏览器，请手动打开上面的二维码预览页。");
+  }
+
+  log(`二维码直链: ${qrState.qrcode_img_content}`);
+  log("请使用微信扫一扫完成绑定，脚本会继续等待登录结果。");
+
+  const deadline = Date.now() + WEIXIN_QR_LOGIN_TIMEOUT_MS;
+  let refreshCount = 1;
+  let scannedPrinted = false;
+
+  while (Date.now() < deadline) {
+    const statusResponse = await pollWeixinQrStatus(qrState.qrcode, {
+      apiBaseUrl: WEIXIN_DEFAULT_BASE_URL,
+    });
+
+    switch (statusResponse?.status) {
+      case "wait":
+        break;
+      case "scaned":
+        if (!scannedPrinted) {
+          log("已扫码，请在微信中确认授权。");
+          scannedPrinted = true;
+        }
+        break;
+      case "expired": {
+        refreshCount += 1;
+        if (refreshCount > WEIXIN_QR_MAX_REFRESH_COUNT) {
+          throw new Error("登录超时：二维码多次过期，请重新开始登录流程。");
+        }
+
+        log(`二维码已过期，正在刷新...(${refreshCount}/${WEIXIN_QR_MAX_REFRESH_COUNT})`);
+        qrState = await fetchWeixinQrCode({
+          apiBaseUrl: WEIXIN_DEFAULT_BASE_URL,
+          botType: WEIXIN_DEFAULT_BOT_TYPE,
+        });
+
+        if (!qrState?.qrcode || !qrState?.qrcode_img_content) {
+          throw new Error("二维码刷新失败：未拿到新的二维码链接。");
+        }
+
+        await writeWeixinQrPreview(qrState.qrcode_img_content);
+        log("二维码已刷新，浏览器预览页会自动更新；如果页面未刷新，请手动刷新浏览器。");
+        log(`二维码直链: ${qrState.qrcode_img_content}`);
+        scannedPrinted = false;
+        break;
+      }
+      case "confirmed": {
+        const accountId = normalizeAccountId(statusResponse.ilink_bot_id);
+        const botToken = String(statusResponse.bot_token || "").trim();
+
+        if (!accountId || !botToken) {
+          throw new Error("登录失败：微信服务端未返回完整的账号标识或 Bot Token。");
+        }
+
+        await saveWeixinAccount(accountId, {
+          token: botToken,
+          baseUrl: String(statusResponse.baseurl || WEIXIN_DEFAULT_BASE_URL).trim() || WEIXIN_DEFAULT_BASE_URL,
+          userId: String(statusResponse.ilink_user_id || "").trim(),
+        });
+        await registerWeixinAccountId(accountId);
+        await ensureWeixinChannelConfig();
+
+        log(`✅ 与微信连接成功，账号已写入本地: ${accountId}`);
+        await restartGateway(env);
+        return;
+      }
+      default:
+        break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error("登录超时，请重新执行部署脚本后再次扫码。");
+}
+
 async function resolvePackageRootFromExecutablePath(executablePath, visited = new Set()) {
   const normalizedPath = normalizePathForCompare(executablePath);
 
@@ -576,6 +1013,12 @@ async function main() {
   await finalizePluginAllowlist(allowlistState);
   await restartGateway(env);
   log("开始微信扫码登录...");
+
+  if (process.platform === "win32") {
+    await runWindowsWeixinLogin(env);
+    return;
+  }
+
   await runStreamingCommand("openclaw", ["channels", "login", "--channel", WEIXIN_PLUGIN_ID], env);
 }
 
