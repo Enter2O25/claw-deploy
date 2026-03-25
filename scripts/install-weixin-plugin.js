@@ -104,7 +104,11 @@ async function listDiscoveredPluginIds() {
   }
 
   const entries = await fs.readdir(extensionsRoot, { withFileTypes: true });
-  return uniqueStrings(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name));
+  return uniqueStrings(
+    entries
+      .filter((entry) => entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith("."))
+      .map((entry) => entry.name),
+  );
 }
 
 function readConfiguredAllowlist(config) {
@@ -129,18 +133,18 @@ async function preparePluginAllowlist() {
   const discoveredPluginIds = await listDiscoveredPluginIds();
   const baselineAllow = uniqueStrings(originalAllow.length ? originalAllow : discoveredPluginIds);
   const tempAllow = uniqueStrings(baselineAllow.filter((id) => id !== WEIXIN_PLUGIN_ID));
+  const wroteTempAllow = tempAllow.length > 0;
 
-  if (!tempAllow.length) {
-    tempAllow.push("__claw_deploy_placeholder__");
+  if (wroteTempAllow) {
+    await setPluginsAllow(tempAllow);
+    log(`已临时写入 plugins.allow，避免安装阶段抢先自动加载微信插件: ${tempAllow.join(", ")}`);
   }
-
-  await setPluginsAllow(tempAllow);
-  log(`已临时写入 plugins.allow，避免安装阶段抢先自动加载微信插件: ${tempAllow.join(", ")}`);
 
   return {
     originalHadExplicitAllow: originalAllow.length > 0,
     originalAllow,
     discoveredPluginIds,
+    wroteTempAllow,
   };
 }
 
@@ -151,6 +155,31 @@ async function finalizePluginAllowlist(state) {
 
   await setPluginsAllow(finalAllow);
   log(`已写入 plugins.allow 显式信任列表: ${finalAllow.join(", ")}`);
+}
+
+async function ensureSharedHostOpenClawLink(hostPackageRoot) {
+  const sharedNodeModulesRoot = path.join(getExtensionsRoot(), "node_modules");
+  const sharedOpenClawLinkPath = path.join(sharedNodeModulesRoot, OPENCLAW_PACKAGE_NAME);
+
+  await fs.mkdir(sharedNodeModulesRoot, { recursive: true });
+
+  if (await pathExists(sharedOpenClawLinkPath)) {
+    const currentTarget = await fs.realpath(sharedOpenClawLinkPath).catch(() => "");
+
+    if (currentTarget && normalizePathForCompare(currentTarget) === normalizePathForCompare(hostPackageRoot)) {
+      return { changed: false, reason: "already-linked", linkPath: sharedOpenClawLinkPath };
+    }
+
+    const stats = await fs.lstat(sharedOpenClawLinkPath);
+    if (!stats.isSymbolicLink()) {
+      return { changed: false, reason: "occupied", linkPath: sharedOpenClawLinkPath };
+    }
+
+    await fs.unlink(sharedOpenClawLinkPath);
+  }
+
+  await fs.symlink(hostPackageRoot, sharedOpenClawLinkPath, process.platform === "win32" ? "junction" : "dir");
+  return { changed: true, reason: "linked", linkPath: sharedOpenClawLinkPath };
 }
 
 function extractPackageRootFromPath(targetPath) {
@@ -504,6 +533,18 @@ async function repairWeixinPlugin(env) {
 async function main() {
   const env = await buildShellEnv();
   const allowlistState = await preparePluginAllowlist();
+  const hostPackageRoot = await findHostOpenClawPackageRoot(env);
+
+  if (hostPackageRoot) {
+    const sharedLinkResult = await ensureSharedHostOpenClawLink(hostPackageRoot);
+
+    if (sharedLinkResult.changed) {
+      log(`已补充共享宿主 openclaw 软链接: ${sharedLinkResult.linkPath}`);
+    }
+  } else {
+    log("安装前暂未定位到宿主 openclaw 包根目录，将在安装后继续尝试修复插件链接。");
+  }
+
   await installWeixinPlugin(env);
 
   const repairResult = await repairWeixinPlugin(env);
