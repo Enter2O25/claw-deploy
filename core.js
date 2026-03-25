@@ -525,6 +525,11 @@ export function buildSpawnInvocation(command, args = [], options = {}) {
     "$wrappedArgs = @()",
     "if ($env:CLAW_DEPLOY_WRAPPED_ARGS_JSON) { $wrappedArgs = @((ConvertFrom-Json -InputObject $env:CLAW_DEPLOY_WRAPPED_ARGS_JSON)) }",
     "$resolvedCommand = if (Test-Path $wrappedCommand) { $wrappedCommand } else { (Get-Command $wrappedCommand -ErrorAction Stop).Source }",
+    "$resolvedExtension = [System.IO.Path]::GetExtension($resolvedCommand)",
+    "if ($resolvedExtension -and @('.cmd', '.bat') -contains $resolvedExtension.ToLowerInvariant()) {",
+    "  $ps1Candidate = [System.IO.Path]::ChangeExtension($resolvedCommand, '.ps1')",
+    "  if (Test-Path $ps1Candidate) { $resolvedCommand = $ps1Candidate }",
+    "}",
     "& $resolvedCommand @wrappedArgs",
     "exit $LASTEXITCODE",
   ].join("; ");
