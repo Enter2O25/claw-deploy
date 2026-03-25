@@ -277,7 +277,7 @@ function validatePluginResolution(pluginRoot) {
   const pluginRequire = createRequire(path.join(pluginRoot, "index.ts"));
 
   return {
-    packageJsonPath: pluginRequire.resolve("openclaw/package.json"),
+    packageEntryPath: pluginRequire.resolve("openclaw"),
     modulePath: pluginRequire.resolve(REQUIRED_OPENCLAW_MODULE),
   };
 }
@@ -318,17 +318,19 @@ async function repairWeixinPlugin(env) {
   }
 
   try {
+    const validation = validatePluginResolution(pluginRoot);
+
     return {
       pluginRoot,
       hostPackageRoot,
       repaired: linkResult.changed,
       initialValidationError,
-      validation: validatePluginResolution(pluginRoot),
+      validation,
     };
   } catch (error) {
-    const reason = initialValidationError ? initialValidationError.message : error.message;
+    const reasons = [initialValidationError?.message, error.message].filter(Boolean).join("；修复后仍失败：");
     throw new Error(
-      `微信插件已安装到 ${pluginRoot}，但仍无法解析 ${REQUIRED_OPENCLAW_MODULE}。最近一次失败原因：${reason}`,
+      `微信插件已安装到 ${pluginRoot}，但仍无法解析 ${REQUIRED_OPENCLAW_MODULE}。失败详情：${reasons}`,
     );
   }
 }
