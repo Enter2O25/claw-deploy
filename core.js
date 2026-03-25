@@ -871,6 +871,7 @@ function buildNativeWindowsGatewayStep() {
   return {
     id: "start-native-windows-gateway",
     title: "在后台启动 Gateway（Windows 原生模式）",
+    waitForExit: true,
     command: getWindowsPowerShellCommand(),
     args: [
       "-NoProfile",

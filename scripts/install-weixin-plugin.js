@@ -257,7 +257,8 @@ async function runCommand(command, args, options = {}) {
   });
 }
 
-async function runStreamingCommand(command, args, env) {
+async function runStreamingCommand(command, args, env, options = {}) {
+  const completionEvent = options.waitForExit ? "exit" : "close";
   const invocation = buildSpawnInvocation(command, args, { env });
 
   return new Promise((resolve, reject) => {
@@ -267,7 +268,7 @@ async function runStreamingCommand(command, args, env) {
     });
 
     child.on("error", reject);
-    child.on("close", (code) => {
+    child.on(completionEvent, (code) => {
       if ((code ?? 0) !== 0) {
         reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
         return;
@@ -338,6 +339,7 @@ async function restartGateway(env) {
         "-Restart",
       ],
       env,
+      { waitForExit: true },
     );
     return;
   }

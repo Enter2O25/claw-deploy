@@ -336,6 +336,7 @@ async function runPlan(plan, secrets) {
         env,
         shell: step.shell ?? false,
       });
+      const completionEvent = step.waitForExit ? "exit" : "close";
       const child = spawn(invocation.command, invocation.args, {
         ...invocation.options,
         stdio: ["ignore", "pipe", "pipe"],
@@ -350,7 +351,7 @@ async function runPlan(plan, secrets) {
       });
 
       child.on("error", reject);
-      child.on("close", (code) => {
+      child.on(completionEvent, (code) => {
         if ((code ?? 0) !== 0) {
           reject(new Error(`${step.title} 失败，退出码 ${code}`));
           return;
