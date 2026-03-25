@@ -325,6 +325,23 @@ async function installWeixinPlugin(env) {
 
 async function restartGateway(env) {
   log("正在重启 OpenClaw Gateway...");
+  if (process.platform === "win32") {
+    const systemRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+    await runStreamingCommand(
+      path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        path.join(__dirname, "start-openclaw-gateway.ps1"),
+        "-Restart",
+      ],
+      env,
+    );
+    return;
+  }
+
   await runStreamingCommand("openclaw", ["gateway", "restart"], env);
 }
 

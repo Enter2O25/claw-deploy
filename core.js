@@ -867,6 +867,21 @@ function buildWeixinInstallerStep() {
   };
 }
 
+function buildNativeWindowsGatewayStep() {
+  return {
+    id: "start-native-windows-gateway",
+    title: "在后台启动 Gateway（Windows 原生模式）",
+    command: getWindowsPowerShellCommand(),
+    args: [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      path.join(__dirname, "scripts", "start-openclaw-gateway.ps1"),
+    ],
+  };
+}
+
 /**
  * OpenClaw config set 会先尝试把值按 JSON5 解析，失败后再按普通字符串处理。
  * 因此字符串值不必强制走 strict-json，避免 Windows 终端层把外层引号吃掉后解析失败。
@@ -907,6 +922,7 @@ export function buildDeploymentPlan(envState, payload) {
   }
 
   const steps = [];
+  const isNativeWindows = envState.platform.os === "win32";
 
   if (!envState.node.available || !envState.node.version || envState.node.version.major < 22 || !envState.openclaw.available) {
     steps.push(buildInstallerStep());
@@ -1054,19 +1070,26 @@ export function buildDeploymentPlan(envState, payload) {
       command: "openclaw",
       args: ["config", "validate"],
     },
-    {
-      id: "install-gateway-service",
-      title: "安装后台 Gateway 服务",
-      command: "openclaw",
-      args: ["gateway", "install", "--runtime", "node", "--force"],
-    },
-    {
-      id: "start-gateway-service",
-      title: "启动后台 Gateway 服务",
-      command: "openclaw",
-      args: ["gateway", "start"],
-    },
   );
+
+  if (isNativeWindows) {
+    steps.push(buildNativeWindowsGatewayStep());
+  } else {
+    steps.push(
+      {
+        id: "install-gateway-service",
+        title: "安装后台 Gateway 服务",
+        command: "openclaw",
+        args: ["gateway", "install", "--runtime", "node", "--force"],
+      },
+      {
+        id: "start-gateway-service",
+        title: "启动后台 Gateway 服务",
+        command: "openclaw",
+        args: ["gateway", "start"],
+      },
+    );
+  }
 
   if (payload.botId === "weixin") {
     steps.push(buildWeixinInstallerStep());
@@ -1226,7 +1249,13 @@ function getUserFacingPathRefreshHint() {
  * 后台服务已经由脚本显式安装并启动；Linux 服务器若要求退出 SSH 后继续常驻，还需要开启 linger。
  */
 function buildBackgroundServiceNotes(openclawCommand) {
-  const notes = [`后台 Gateway 服务已启动，可执行 ${openclawCommand} gateway status --deep 查看当前状态。`];
+  const notes =
+    process.platform === "win32"
+      ? [
+          `后台 Gateway 已启动，可执行 ${openclawCommand} gateway status --deep 查看当前状态。`,
+          "原生 Windows 下当前脚本会直接在后台启动 Gateway，而不是安装登录自启服务；如需更稳定的常驻方式，建议迁移到 WSL2。",
+        ]
+      : [`后台 Gateway 服务已启动，可执行 ${openclawCommand} gateway status --deep 查看当前状态。`];
 
   if (process.platform === "linux") {
     notes.push("如需在 Linux 服务器退出 SSH 后仍继续常驻，请执行一次：sudo loginctl enable-linger $USER");
