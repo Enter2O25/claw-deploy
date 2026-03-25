@@ -868,6 +868,22 @@ function buildWeixinInstallerStep() {
 }
 
 /**
+ * OpenClaw config set 会先尝试把值按 JSON5 解析，失败后再按普通字符串处理。
+ * 因此字符串值不必强制走 strict-json，避免 Windows 终端层把外层引号吃掉后解析失败。
+ */
+function buildConfigSetArgs(configPath, value) {
+  const args = ["config", "set", configPath];
+
+  if (typeof value === "string") {
+    args.push(value);
+    return args;
+  }
+
+  args.push(JSON.stringify(value), "--strict-json");
+  return args;
+}
+
+/**
  * 只暴露极简输入项，因此这里固定好安全默认值和标准化的部署动作。
  */
 export function buildDeploymentPlan(envState, payload) {
@@ -908,7 +924,7 @@ export function buildDeploymentPlan(envState, payload) {
       id: `configure-${provider.id}-env`,
       title: `写入 ${provider.keyLabel}`,
       command: "openclaw",
-      args: ["config", "set", `env.${provider.envVar}`, JSON.stringify(payload.apiKey), "--strict-json"],
+      args: buildConfigSetArgs(`env.${provider.envVar}`, payload.apiKey),
     });
   }
 
@@ -916,14 +932,14 @@ export function buildDeploymentPlan(envState, payload) {
     id: "set-model",
     title: "设置默认模型",
     command: "openclaw",
-    args: ["config", "set", "agents.defaults.model.primary", JSON.stringify(modelRef), "--strict-json"],
+    args: buildConfigSetArgs("agents.defaults.model.primary", modelRef),
   });
 
   steps.push({
     id: "disable-heartbeat",
     title: "关闭默认心跳，避免未配置完成时主动发消息",
     command: "openclaw",
-    args: ["config", "set", "agents.defaults.heartbeat.every", JSON.stringify("0m"), "--strict-json"],
+    args: buildConfigSetArgs("agents.defaults.heartbeat.every", "0m"),
   });
 
   if (payload.botId === "whatsapp") {
@@ -932,19 +948,19 @@ export function buildDeploymentPlan(envState, payload) {
         id: "enable-whatsapp",
         title: "写入 WhatsApp 安全默认配置",
         command: "openclaw",
-        args: ["config", "set", "channels.whatsapp.enabled", "true", "--strict-json"],
+        args: buildConfigSetArgs("channels.whatsapp.enabled", true),
       },
       {
         id: "whatsapp-dm-policy",
         title: "启用 WhatsApp 配对式私聊权限",
         command: "openclaw",
-        args: ["config", "set", "channels.whatsapp.dmPolicy", JSON.stringify("pairing"), "--strict-json"],
+        args: buildConfigSetArgs("channels.whatsapp.dmPolicy", "pairing"),
       },
       {
         id: "whatsapp-group-policy",
         title: "关闭 WhatsApp 群消息，默认更安全",
         command: "openclaw",
-        args: ["config", "set", "channels.whatsapp.groupPolicy", JSON.stringify("disabled"), "--strict-json"],
+        args: buildConfigSetArgs("channels.whatsapp.groupPolicy", "disabled"),
       },
     );
   }
@@ -955,37 +971,31 @@ export function buildDeploymentPlan(envState, payload) {
         id: "enable-telegram",
         title: "启用 Telegram 渠道",
         command: "openclaw",
-        args: ["config", "set", "channels.telegram.enabled", "true", "--strict-json"],
+        args: buildConfigSetArgs("channels.telegram.enabled", true),
       },
       {
         id: "telegram-bot-token",
         title: "写入 Telegram Bot Token",
         command: "openclaw",
-        args: ["config", "set", "channels.telegram.botToken", JSON.stringify(payload.telegramBotToken), "--strict-json"],
+        args: buildConfigSetArgs("channels.telegram.botToken", payload.telegramBotToken),
       },
       {
         id: "telegram-dm-policy",
         title: "启用 Telegram 配对式私聊权限",
         command: "openclaw",
-        args: ["config", "set", "channels.telegram.dmPolicy", JSON.stringify("pairing"), "--strict-json"],
+        args: buildConfigSetArgs("channels.telegram.dmPolicy", "pairing"),
       },
       {
         id: "telegram-group-policy",
         title: "关闭 Telegram 群消息，默认更安全",
         command: "openclaw",
-        args: ["config", "set", "channels.telegram.groupPolicy", JSON.stringify("disabled"), "--strict-json"],
+        args: buildConfigSetArgs("channels.telegram.groupPolicy", "disabled"),
       },
       {
         id: "telegram-group-mentions",
         title: "预写入 Telegram 群聊提及规则",
         command: "openclaw",
-        args: [
-          "config",
-          "set",
-          "channels.telegram.groups",
-          JSON.stringify({ "*": { requireMention: true } }),
-          "--strict-json",
-        ],
+        args: buildConfigSetArgs("channels.telegram.groups", { "*": { requireMention: true } }),
       },
     );
   }
@@ -996,55 +1006,43 @@ export function buildDeploymentPlan(envState, payload) {
         id: "enable-feishu",
         title: "启用飞书渠道",
         command: "openclaw",
-        args: ["config", "set", "channels.feishu.enabled", "true", "--strict-json"],
+        args: buildConfigSetArgs("channels.feishu.enabled", true),
       },
       {
         id: "feishu-default-account",
         title: "设置飞书默认账号",
         command: "openclaw",
-        args: ["config", "set", "channels.feishu.defaultAccount", JSON.stringify("main"), "--strict-json"],
+        args: buildConfigSetArgs("channels.feishu.defaultAccount", "main"),
       },
       {
         id: "feishu-app-id",
         title: "写入飞书 App ID",
         command: "openclaw",
-        args: ["config", "set", "channels.feishu.accounts.main.appId", JSON.stringify(payload.feishuAppId), "--strict-json"],
+        args: buildConfigSetArgs("channels.feishu.accounts.main.appId", payload.feishuAppId),
       },
       {
         id: "feishu-app-secret",
         title: "写入飞书 App Secret",
         command: "openclaw",
-        args: [
-          "config",
-          "set",
-          "channels.feishu.accounts.main.appSecret",
-          JSON.stringify(payload.feishuAppSecret),
-          "--strict-json",
-        ],
+        args: buildConfigSetArgs("channels.feishu.accounts.main.appSecret", payload.feishuAppSecret),
       },
       {
         id: "feishu-dm-policy",
         title: "启用飞书配对式私聊权限",
         command: "openclaw",
-        args: ["config", "set", "channels.feishu.dmPolicy", JSON.stringify("pairing"), "--strict-json"],
+        args: buildConfigSetArgs("channels.feishu.dmPolicy", "pairing"),
       },
       {
         id: "feishu-group-policy",
         title: "关闭飞书群消息，默认更安全",
         command: "openclaw",
-        args: ["config", "set", "channels.feishu.groupPolicy", JSON.stringify("disabled"), "--strict-json"],
+        args: buildConfigSetArgs("channels.feishu.groupPolicy", "disabled"),
       },
       {
         id: "feishu-group-mentions",
         title: "预写入飞书群聊提及规则",
         command: "openclaw",
-        args: [
-          "config",
-          "set",
-          "channels.feishu.groups",
-          JSON.stringify({ "*": { requireMention: true } }),
-          "--strict-json",
-        ],
+        args: buildConfigSetArgs("channels.feishu.groups", { "*": { requireMention: true } }),
       },
     );
   }
