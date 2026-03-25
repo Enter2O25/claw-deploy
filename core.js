@@ -735,6 +735,15 @@ function buildInstallerStep() {
   };
 }
 
+function buildWeixinInstallerStep() {
+  return {
+    id: "install-weixin-plugin",
+    title: "安装微信渠道插件并进入扫码连接流程",
+    command: process.execPath,
+    args: [path.join(__dirname, "scripts", "install-weixin-plugin.js")],
+  };
+}
+
 /**
  * 只暴露极简输入项，因此这里固定好安全默认值和标准化的部署动作。
  */
@@ -939,12 +948,7 @@ export function buildDeploymentPlan(envState, payload) {
   );
 
   if (payload.botId === "weixin") {
-    steps.push({
-      id: "install-weixin-plugin",
-      title: "安装微信渠道插件并进入扫码连接流程",
-      command: "npx",
-      args: ["-y", "@tencent-weixin/openclaw-weixin-cli@latest", "install"],
-    });
+    steps.push(buildWeixinInstallerStep());
   }
 
   if (payload.botId === "whatsapp") {
@@ -1055,8 +1059,10 @@ function buildPostDeployNotes(provider, botId) {
     return [
       ...backgroundNotes,
       "微信插件安装器会在部署过程中自动检测当前 OpenClaw 版本，并选择兼容的微信插件版本线。",
+      "当前脚本会在官方安装器结束后额外校验插件能否解析宿主 openclaw/plugin-sdk；若官方安装器漏掉宿主包链接，会自动补修。",
       "安装器会展示微信二维码；请在执行过程中直接用微信扫一扫完成绑定。",
-      "如果因为宿主版本不兼容而失败，可重新执行：npx -y @tencent-weixin/openclaw-weixin-cli install",
+      `如需稍后手动重试扫码，可执行：${openclawCommand} channels login --channel openclaw-weixin`,
+      "如果需要完整重装微信插件，可重新执行：npx -y @tencent-weixin/openclaw-weixin-cli install",
       `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
     ];
   }
