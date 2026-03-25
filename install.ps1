@@ -35,6 +35,26 @@ function Write-Step {
   Write-Host "[$Index] $Title"
 }
 
+# 直接按 UTF-8 读取并补写 BOM，避免 Windows PowerShell 5.1
+# 把仓库里的 UTF-8 无 BOM 脚本按本地代码页误读后触发解析错误。
+function Convert-PowerShellScriptsToUtf8Bom {
+  param(
+    [string]$RootPath
+  )
+
+  $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false, $true
+  $utf8Bom = New-Object System.Text.UTF8Encoding -ArgumentList $true
+
+  Get-ChildItem -Path $RootPath -Filter "*.ps1" -File -Recurse | ForEach-Object {
+    try {
+      $content = [System.IO.File]::ReadAllText($_.FullName, $utf8NoBom)
+      [System.IO.File]::WriteAllText($_.FullName, $content, $utf8Bom)
+    } catch {
+      throw "标准化 PowerShell 脚本编码失败：$($_.FullName) - $($_.Exception.Message)"
+    }
+  }
+}
+
 try {
   Write-Step "步骤 1/3" "下载并准备部署脚本"
   Write-Host "  · 仓库来源: $repository@$refName"
@@ -66,6 +86,7 @@ try {
   }
 
   Move-Item -Path $sourceDir.FullName -Destination $installHome -Force
+  Convert-PowerShellScriptsToUtf8Bom -RootPath $installHome
   Write-Host "  ✓ 代码已安装到 $installHome"
   & (Join-Path $installHome "scripts\bootstrap.ps1") @args
   exit $LASTEXITCODE
