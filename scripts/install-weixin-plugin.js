@@ -27,6 +27,7 @@ const WEIXIN_VALID_ACCOUNT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/iu;
 const WEIXIN_INVALID_ACCOUNT_ID_CHARS_RE = /[^a-z0-9_-]+/giu;
 const WEIXIN_ACCOUNT_ID_LEADING_DASH_RE = /^-+/u;
 const WEIXIN_ACCOUNT_ID_TRAILING_DASH_RE = /-+$/u;
+const WEIXIN_PLUGIN_ARCHIVE_RE = /\.(?:tgz|tar\.gz|zip)$/iu;
 
 function log(message) {
   console.log(`[openclaw-weixin] ${message}`);
@@ -91,6 +92,46 @@ function getOpenClawConfigPath() {
 
 function uniqueStrings(values) {
   return Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())));
+}
+
+function isLocalOrExplicitPluginSpec(spec) {
+  const normalized = String(spec || "").trim();
+
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.startsWith("npm:") || normalized.startsWith("clawhub:") || normalized.startsWith("file:")) {
+    return true;
+  }
+
+  if (path.isAbsolute(normalized)) {
+    return true;
+  }
+
+  return (
+    normalized.startsWith("./") ||
+    normalized.startsWith(".\\") ||
+    normalized.startsWith("../") ||
+    normalized.startsWith("..\\") ||
+    normalized.startsWith("~/") ||
+    normalized.startsWith("~\\") ||
+    WEIXIN_PLUGIN_ARCHIVE_RE.test(normalized)
+  );
+}
+
+function resolveNpmOnlyPluginSpec(spec) {
+  const normalized = String(spec || "").trim();
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  return isLocalOrExplicitPluginSpec(normalized) ? normalized : `npm:${normalized}`;
+}
+
+function stripNpmPrefix(spec) {
+  return String(spec || "").trim().replace(/^npm:/u, "");
 }
 
 async function readOpenClawConfig() {
@@ -509,6 +550,50 @@ async function runStreamingCommand(command, args, env, options = {}) {
   });
 }
 
+async function installPluginFromArchive(spec, env) {
+  const bareSpec = stripNpmPrefix(spec);
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claw-deploy-weixin-pack-"));
+  const packResult = await runCommand("npm", ["pack", bareSpec], {
+    env,
+    cwd: tempRoot,
+    allowFailure: true,
+  });
+
+  if (packResult.code !== 0) {
+    throw new Error(`npm pack ${bareSpec} 失败：${(`${packResult.stdout}\n${packResult.stderr}`).trim() || "无输出"}`);
+  }
+
+  const archiveFileName = `${packResult.stdout}\n${packResult.stderr}`
+    .split(/\r?\n/gu)
+    .map((line) => line.trim())
+    .filter((line) => WEIXIN_PLUGIN_ARCHIVE_RE.test(line))
+    .pop();
+
+  if (!archiveFileName) {
+    throw new Error(`npm pack ${bareSpec} 未返回归档文件名。`);
+  }
+
+  const archivePath = path.join(tempRoot, archiveFileName);
+  log(`已转为本地归档安装: ${archivePath}`);
+  await runStreamingCommand("openclaw", ["plugins", "install", archivePath], env);
+}
+
+async function installWeixinPluginSpec(spec, env) {
+  const installSpec = resolveNpmOnlyPluginSpec(spec);
+
+  try {
+    await runStreamingCommand("openclaw", ["plugins", "install", installSpec], env);
+  } catch (error) {
+    if (installSpec.startsWith("npm:")) {
+      log(`直接通过 OpenClaw 安装 ${installSpec} 失败，改用本地归档重试...`);
+      await installPluginFromArchive(installSpec, env);
+      return;
+    }
+
+    throw error;
+  }
+}
+
 async function detectOpenClawVersion(env) {
   const versionResult = await runCommand("openclaw", ["--version"], { env, allowFailure: true });
   const version = parseSemver(`${versionResult.stdout}\n${versionResult.stderr}`);
@@ -524,10 +609,11 @@ async function installWeixinPlugin(env) {
   const explicitPluginSpec = String(process.env.CLAW_DEPLOY_WEIXIN_PLUGIN_SPEC || "").trim();
 
   if (explicitPluginSpec) {
+    const installSpec = resolveNpmOnlyPluginSpec(explicitPluginSpec);
     log(`使用显式指定的微信插件版本: ${explicitPluginSpec}`);
-    log(`正在安装插件 ${explicitPluginSpec}...`);
-    await runStreamingCommand("openclaw", ["plugins", "install", explicitPluginSpec], env);
-    return { pluginSpec: explicitPluginSpec, mode: "override" };
+    log(`正在安装插件 ${installSpec}...`);
+    await installWeixinPluginSpec(explicitPluginSpec, env);
+    return { pluginSpec: installSpec, mode: "override" };
   }
 
   const openclawVersion = await detectOpenClawVersion(env);
@@ -535,18 +621,20 @@ async function installWeixinPlugin(env) {
 
   if (compareSemver(openclawVersion, OPENCLAW_NEW_HOST_MIN_VERSION) >= 0) {
     const pluginSpec = `${WEIXIN_PLUGIN_PACKAGE}@latest`;
+    const installSpec = resolveNpmOnlyPluginSpec(pluginSpec);
     log("匹配兼容版本: 2.0.x (新宿主线) (dist-tag: latest)");
-    log(`正在安装插件 ${pluginSpec}...`);
-    await runStreamingCommand("openclaw", ["plugins", "install", pluginSpec], env);
-    return { pluginSpec, mode: "matrix", distTag: "latest", openclawVersion: openclawVersion.raw };
+    log(`正在安装插件 ${installSpec}...`);
+    await installWeixinPluginSpec(pluginSpec, env);
+    return { pluginSpec: installSpec, mode: "matrix", distTag: "latest", openclawVersion: openclawVersion.raw };
   }
 
   if (compareSemver(openclawVersion, OPENCLAW_MIN_VERSION) >= 0) {
     const pluginSpec = `${WEIXIN_PLUGIN_PACKAGE}@legacy`;
+    const installSpec = resolveNpmOnlyPluginSpec(pluginSpec);
     log("匹配兼容版本: 1.0.x (旧宿主线) (dist-tag: legacy)");
-    log(`正在安装插件 ${pluginSpec}...`);
-    await runStreamingCommand("openclaw", ["plugins", "install", pluginSpec], env);
-    return { pluginSpec, mode: "matrix", distTag: "legacy", openclawVersion: openclawVersion.raw };
+    log(`正在安装插件 ${installSpec}...`);
+    await installWeixinPluginSpec(pluginSpec, env);
+    return { pluginSpec: installSpec, mode: "matrix", distTag: "legacy", openclawVersion: openclawVersion.raw };
   }
 
   throw new Error(
