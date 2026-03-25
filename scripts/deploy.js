@@ -16,6 +16,8 @@ import {
 const bots = Object.values(BOT_CATALOG);
 const CREDENTIAL_ARG_MAP = {
   "--telegram-bot-token": "telegramBotToken",
+  "--feishu-app-id": "feishuAppId",
+  "--feishu-app-secret": "feishuAppSecret",
 };
 
 function createInteractiveTerminal() {
@@ -108,6 +110,8 @@ function parseArgs(argv) {
     apiKey: "",
     botId: "",
     telegramBotToken: "",
+    feishuAppId: "",
+    feishuAppSecret: "",
     yes: false,
     dryRun: false,
   };
@@ -442,7 +446,7 @@ async function main() {
   const terminal = createInteractiveTerminal();
 
   console.log("OpenClaw 极简部署脚本");
-  console.log("默认只需要选择模型、输入 API Key、选择聊天机器人；若选 Telegram，会额外要求一个 Bot Token。");
+  console.log("默认只需要选择模型、输入 API Key、选择聊天机器人；若选 Telegram 或飞书，会额外要求对应渠道凭证。");
 
   const environment = await detectEnvironment();
   printEnvironment(environment);

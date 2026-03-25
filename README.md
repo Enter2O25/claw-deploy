@@ -12,6 +12,13 @@
 
 4. `Telegram Bot Token`
 
+如果选择 `飞书`，会额外要求 2 个必要字段：
+
+4. `飞书 App ID`
+5. `飞书 App Secret`
+
+如果选择 `微信`，则不需要额外输入字段；脚本会在部署过程中调用微信插件安装器并引导扫码。
+
 其余动作全部由向导自动执行：
 
 - 从当前 OpenClaw 版本动态拉取最新模型目录
@@ -95,6 +102,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 2. 输入 API Key
 3. 选择聊天机器人
 4. 如果选择 Telegram，再输入 BotFather 生成的 Bot Token
+5. 如果选择飞书，再输入飞书开放平台里的 App ID 和 App Secret
 
 其余步骤全部自动执行。
 
@@ -128,6 +136,34 @@ Windows PowerShell:
 powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot telegram --telegram-bot-token 123456789:AAExample --yes
 ```
 
+### 飞书一条命令
+
+macOS / Linux:
+
+```bash
+bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot feishu --feishu-app-id cli_xxx --feishu-app-secret cli_secret_xxx --yes
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot feishu --feishu-app-id cli_xxx --feishu-app-secret cli_secret_xxx --yes
+```
+
+### 微信一条命令
+
+macOS / Linux:
+
+```bash
+bash install.sh --model openai/gpt-5.4 --api-key sk-xxxx --bot weixin --yes
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --api-key sk-xxxx --bot weixin --yes
+```
+
 ## 模型选择说明
 
 - 交互模式下，脚本会先调用 `openclaw models list --all --plain` 拉取当前版本支持的最新模型目录。
@@ -147,6 +183,17 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 
 ## 当前极简模式支持
 
+- `微信机器人`
+  - 不需要额外输入文本凭证；脚本会调用 `npx -y @tencent-weixin/openclaw-weixin-cli install`
+  - 安装器会自动检测本机 `openclaw --version`，并按兼容矩阵选择合适的微信插件版本线
+  - 会在部署过程中展示二维码，直接使用微信扫码即可完成接入
+  - 安装器内部会自动重启 OpenClaw Gateway；脚本最后仍会做一次状态检查
+- `飞书机器人`
+  - 自动写入 `channels.feishu.enabled`、`defaultAccount=main`、`accounts.main.appId/appSecret`、`dmPolicy=pairing`
+  - 会显式安装并启动后台 Gateway 服务
+  - 默认关闭群消息，并预写入 `requireMention=true` 的群提及规则
+  - 仍需在飞书开放平台完成机器人能力开通、事件订阅切换为长连接并添加 `im.message.receive_v1`、发布应用
+  - 首次接入时先给机器人发一条普通私聊消息，再执行 `~/.local/bin/openclaw pairing list feishu` / `~/.local/bin/openclaw pairing approve feishu <CODE>`
 - `Telegram`
   - 自动写入 `channels.telegram.enabled`、`botToken`、`dmPolicy=pairing`
   - 会显式安装并启动后台 Gateway 服务
@@ -161,7 +208,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 
 - `Discord`
 
-原因不是技术不能做，而是这类渠道通常还需要用户提前去平台后台创建 Bot 并拿到额外 Token。Telegram 已在本版本中兼容，但会诚实地多要一个 Bot Token 字段。
+原因不是技术不能做，而是这类渠道通常还需要用户提前去平台后台创建 Bot 并拿到额外 Token。Telegram、飞书和微信已经在本版本中兼容；其中微信走插件扫码流程，Telegram / 飞书会诚实地额外要求对应渠道凭证。
 
 ## 目录说明
 
@@ -173,7 +220,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - 支持本地执行和远程 `Invoke-WebRequest` 在线执行
 - [scripts/deploy.js](/Users/liujinglong/my/project/claw-deploy/scripts/deploy.js)
   - 终端交互式部署脚本
-  - 支持 `--model`、`--api-key`、`--bot`、`--telegram-bot-token`、`--yes`、`--dry-run`
+  - 支持 `--model`、`--api-key`、`--bot`、`--telegram-bot-token`、`--feishu-app-id`、`--feishu-app-secret`、`--yes`、`--dry-run`
   - `--model` 推荐使用完整模型引用 `provider/model`
 - [scripts/bootstrap.sh](/Users/liujinglong/my/project/claw-deploy/scripts/bootstrap.sh)
   - macOS / Linux 自举脚本
@@ -185,6 +232,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
 - [core.js](/Users/liujinglong/my/project/claw-deploy/core.js)
   - 部署能力核心模块
   - 负责环境探测、最新模型目录拉取、部署编排和日志脱敏
+  - 微信渠道会在这里追加官方微信插件安装器步骤
 
 ## 实现假设
 
@@ -196,6 +244,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 --model openai/gpt-5.4 --
   - `openclaw gateway start`
 - WhatsApp 允许保留最后一步扫码登录，因为它不是额外文本输入，仍符合“极简输入”的目标。
 - Telegram 按 OpenClaw 官方接入方式，需要额外提供 BotFather 的 Bot Token；脚本会把这一步收敛成单独一个字段。
+- 飞书按 OpenClaw 官方接入方式，需要额外提供 App ID 和 App Secret；脚本会把这两步收敛成两个字段。
+- 飞书平台侧的机器人能力开通、事件订阅与应用发布仍需用户自己在开放平台完成；脚本只负责 OpenClaw 本地侧配置。
+- 微信按腾讯微信团队提供的安装器方式接入：`npx -y @tencent-weixin/openclaw-weixin-cli install`。
+- 根据当前 npm README，微信安装器会自动根据 OpenClaw 版本选择兼容插件线：`latest` 适配 `>=2026.3.22`，`legacy` 适配 `>=2026.3.0 <2026.3.22`。
 - 默认把群消息关闭、私聊改成 `pairing`，先保证安全，再考虑开放更多范围。
 - Linux 服务器若要求“退出 SSH 后仍继续运行”，仍需按 systemd user service 的要求启用 `loginctl enable-linger`。
 - 现在会展示 OpenClaw 全量模型目录；其中一部分 provider 只能在主机上先完成 OAuth、云凭证或 endpoint 配置后再使用。

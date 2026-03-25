@@ -339,6 +339,36 @@ export const BOT_CATALOG = {
       },
     ],
   },
+  feishu: {
+    id: "feishu",
+    label: "飞书机器人",
+    description: "需要先在飞书开放平台创建企业自建应用并准备 App ID / App Secret，部署后可在飞书私聊接入。",
+    resultHint:
+      "部署完成后请确认飞书应用已开通机器人能力、开启长连接事件订阅并发布，然后在飞书私聊机器人按 pairing 命令批准首个配对码。",
+    credentialFields: [
+      {
+        id: "feishuAppId",
+        label: "飞书 App ID",
+        placeholder: "cli_xxx",
+        hint: "在飞书开放平台的“凭证与基础信息”页复制，通常形如 cli_xxx。",
+        secret: false,
+      },
+      {
+        id: "feishuAppSecret",
+        label: "飞书 App Secret",
+        placeholder: "xxx",
+        hint: "在飞书开放平台的“凭证与基础信息”页复制；请妥善保管，不要泄露。",
+        secret: true,
+      },
+    ],
+  },
+  weixin: {
+    id: "weixin",
+    label: "微信机器人",
+    description: "无需额外输入文本凭证；脚本会调用官方微信安装器安装插件，并在部署过程中引导扫码连接。",
+    resultHint: "部署过程中会展示微信二维码，请用微信扫码完成连接，然后回到当前终端继续等待安装器收尾。",
+    credentialFields: [],
+  },
   whatsapp: {
     id: "whatsapp",
     label: "WhatsApp 机器人",
@@ -828,6 +858,65 @@ export function buildDeploymentPlan(envState, payload) {
     );
   }
 
+  if (payload.botId === "feishu") {
+    steps.push(
+      {
+        id: "enable-feishu",
+        title: "启用飞书渠道",
+        command: "openclaw",
+        args: ["config", "set", "channels.feishu.enabled", "true", "--strict-json"],
+      },
+      {
+        id: "feishu-default-account",
+        title: "设置飞书默认账号",
+        command: "openclaw",
+        args: ["config", "set", "channels.feishu.defaultAccount", JSON.stringify("main"), "--strict-json"],
+      },
+      {
+        id: "feishu-app-id",
+        title: "写入飞书 App ID",
+        command: "openclaw",
+        args: ["config", "set", "channels.feishu.accounts.main.appId", JSON.stringify(payload.feishuAppId), "--strict-json"],
+      },
+      {
+        id: "feishu-app-secret",
+        title: "写入飞书 App Secret",
+        command: "openclaw",
+        args: [
+          "config",
+          "set",
+          "channels.feishu.accounts.main.appSecret",
+          JSON.stringify(payload.feishuAppSecret),
+          "--strict-json",
+        ],
+      },
+      {
+        id: "feishu-dm-policy",
+        title: "启用飞书配对式私聊权限",
+        command: "openclaw",
+        args: ["config", "set", "channels.feishu.dmPolicy", JSON.stringify("pairing"), "--strict-json"],
+      },
+      {
+        id: "feishu-group-policy",
+        title: "关闭飞书群消息，默认更安全",
+        command: "openclaw",
+        args: ["config", "set", "channels.feishu.groupPolicy", JSON.stringify("disabled"), "--strict-json"],
+      },
+      {
+        id: "feishu-group-mentions",
+        title: "预写入飞书群聊提及规则",
+        command: "openclaw",
+        args: [
+          "config",
+          "set",
+          "channels.feishu.groups",
+          JSON.stringify({ "*": { requireMention: true } }),
+          "--strict-json",
+        ],
+      },
+    );
+  }
+
   steps.push(
     {
       id: "validate-config",
@@ -848,6 +937,15 @@ export function buildDeploymentPlan(envState, payload) {
       args: ["gateway", "start"],
     },
   );
+
+  if (payload.botId === "weixin") {
+    steps.push({
+      id: "install-weixin-plugin",
+      title: "安装微信渠道插件并进入扫码连接流程",
+      command: "npx",
+      args: ["-y", "@tencent-weixin/openclaw-weixin-cli@latest", "install"],
+    });
+  }
 
   if (payload.botId === "whatsapp") {
     steps.push({
@@ -938,6 +1036,28 @@ function buildPostDeployNotes(provider, botId) {
       `如果只发 /start 仍没看到配对码，请先执行 ${openclawCommand} pairing list telegram 检查待审批请求。`,
       `查看待审批请求：${openclawCommand} pairing list telegram`,
       `批准配对码：${openclawCommand} pairing approve telegram <CODE>`,
+    ];
+  }
+
+  if (botId === "feishu") {
+    return [
+      ...backgroundNotes,
+      "飞书已启用。请先到飞书开放平台确认应用已发布、机器人能力已开启，并把事件订阅切到长连接后添加 im.message.receive_v1。",
+      "随后在飞书里私聊机器人，发送一条普通消息来触发首个 pairing code。",
+      `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
+      `查看待审批请求：${openclawCommand} pairing list feishu`,
+      `批准配对码：${openclawCommand} pairing approve feishu <CODE>`,
+      '脚本默认关闭飞书群消息；如需群聊接入，可把 channels.feishu.groupPolicy 改为 "open" 或 "allowlist"。',
+    ];
+  }
+
+  if (botId === "weixin") {
+    return [
+      ...backgroundNotes,
+      "微信插件安装器会在部署过程中自动检测当前 OpenClaw 版本，并选择兼容的微信插件版本线。",
+      "安装器会展示微信二维码；请在执行过程中直接用微信扫一扫完成绑定。",
+      "如果因为宿主版本不兼容而失败，可重新执行：npx -y @tencent-weixin/openclaw-weixin-cli install",
+      `如果当前终端提示 openclaw: command not found，可先执行：${pathHint}`,
     ];
   }
 
