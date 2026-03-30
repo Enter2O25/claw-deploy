@@ -887,11 +887,67 @@ function buildNativeWindowsGatewayStep() {
  * OpenClaw config set 会先尝试把值按 JSON5 解析，失败后再按普通字符串处理。
  * 因此字符串值不必强制走 strict-json，避免 Windows 终端层把外层引号吃掉后解析失败。
  */
+function toJson5StringLiteral(value) {
+  return `'${String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")
+    .replace(/\f/g, "\\f")
+    .replace(/\u0008/g, "\\b")}'`;
+}
+
+function toJson5PropertyKey(key) {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : toJson5StringLiteral(key);
+}
+
+/**
+ * Windows PowerShell 转发原生命令时，会重写带双引号的参数，导致对象值里的 JSON 引号丢失。
+ * 这里在 Windows 上改写成 JSON5 字面量，让 OpenClaw 直接走它自带的 JSON5 解析路径。
+ */
+function normalizeConfigValue(value) {
+  const strictJson = JSON.stringify(value);
+
+  if (typeof strictJson !== "string") {
+    throw new Error("OpenClaw 配置值必须可序列化为 JSON。");
+  }
+
+  return JSON.parse(strictJson);
+}
+
+function serializeConfigValueForWindows(value) {
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "string") {
+    return toJson5StringLiteral(value);
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => serializeConfigValueForWindows(item)).join(",")}]`;
+  }
+
+  return `{${Object.entries(value)
+    .map(([key, item]) => `${toJson5PropertyKey(key)}:${serializeConfigValueForWindows(item)}`)
+    .join(",")}}`;
+}
+
 function buildConfigSetArgs(configPath, value) {
   const args = ["config", "set", configPath];
 
   if (typeof value === "string") {
     args.push(value);
+    return args;
+  }
+
+  if (process.platform === "win32") {
+    args.push(serializeConfigValueForWindows(normalizeConfigValue(value)));
     return args;
   }
 
